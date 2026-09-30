@@ -129,7 +129,8 @@ h1, h2, h3 { font-family: 'Cormorant SC', serif; margin: 0 0 10px; letter-spacin
 @keyframes gh-zoom { to { opacity: 0; transform: scale(1.12); } }
 @keyframes gh-combat { to { opacity: 0; transform: scale(1.2); } }
 
-#app { will-change: opacity, transform; }
+/* слой видеокарты только на время анимации появления: постоянный will-change мылил карты и текст */
+#app[class*='enter-'] { will-change: opacity, transform; }
 .enter-fade   { animation: en-fade .6s ease-out; }
 .enter-soft   { animation: en-fade .4s ease-out; }
 .enter-zoom   { animation: en-zoom .6s cubic-bezier(.2, .7, .3, 1); }

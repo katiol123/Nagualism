@@ -58,6 +58,9 @@ function beginSwap(kind = 'fade') {
   app.className = '';
   void app.offsetWidth;
   app.className = 'enter-' + kind;
+  // после анимации снимаем класс — браузер перерисует экран в полной чёткости
+  clearTimeout(app._enterT);
+  app._enterT = setTimeout(() => { if (app.className === 'enter-' + kind) app.className = ''; }, 1900);
 }
 // Плавающие светлячки/искры на фоне
 const motes = (n = 16, cls = '') => `<div class="motes ${cls}">${Array.from({ length: n }, () =>
