@@ -214,7 +214,7 @@ function cardHTML(c, o = {}) {
     <div class="c-name">${d.name}${c.up ? '+' : ''}</div>
     <div class="c-art"><span>${d.art}</span></div>
     <div class="c-type">${TYPE_NAMES[d.type]}${d.rarity !== 'basic' && d.rarity !== 'special' ? ' · ' + RARITY_NAMES[d.rarity] : ''}</div>
-    <div class="c-desc ${desc.replace(/<[^>]+>/g, '').length > 64 ? 'long' : ''}"><span>${desc}</span></div>
+    <div class="c-desc ${(n => n > 76 ? 'long xlong' : n > 64 ? 'long' : '')(desc.replace(/<[^>]+>/g, '').length)}"><span>${desc}</span></div>
   </div>`;
 }
 function relicHTML(id, extra = '') {
@@ -968,6 +968,13 @@ function mkEnemy(id) {
   return { uid: 'e' + (enemySeq++), id, def: d, name: d.name, hp, maxHp: hp, block: 0, st: {}, hist: [], turn: 0, move: null, dead: false, seed: rnd(0, 99) };
 }
 const alive = () => cb.enemies.filter(e => !e.dead);
+// null — можно; иначе текст причины
+function whyNot(c) {
+  const d = CARDS[c.id];
+  if (d.unplayable) return 'Эту карту нельзя разыграть';
+  if (costOf(c) > cb.p.energy) return 'Недостаточно энергии';
+  return d.requires ? d.requires(G) : null;
+}
 
 function playerDmg(base, target) {
   let d = base + (cb.p.st.strength || 0);
@@ -1253,6 +1260,7 @@ function startTurn() {
   p.energy = p.maxEnergy;
   if (p.st.death) G.buffSelf('strength', p.st.death);
   drawCards(5);
+  if (p.st.dream) { const n = p.st.dream; delete p.st.dream; fx('hero', `💤 +${n} карта`, 'buff'); drawCards(n); }
   run.relics.forEach(r => RELICS[r].turnStart && RELICS[r].turnStart(G, cb.turn));
   cb.busy = false;
   sfx('turn');
@@ -1266,9 +1274,9 @@ async function playCard(uid, target) {
   const i = cb.hand.findIndex(c => c.uid === uid);
   if (i < 0) return;
   const c = cb.hand[i], d = CARDS[c.id];
-  if (d.unplayable) { toast('Эту карту нельзя разыграть'); return; }
+  const why = whyNot(c);
+  if (why) { toast(why); return; }
   const cost = costOf(c);
-  if (cost > cb.p.energy) { toast('Недостаточно энергии'); return; }
   cb.p.energy -= cost;
   cb.hand.splice(i, 1);
   cb.selected = null;
@@ -1367,9 +1375,12 @@ async function doEnemyMove(e) {
     }
   }
   if (m.heal) { e.hp = Math.min(e.maxHp, e.hp + m.heal); fx(e.uid, `+${m.heal} ❤`, 'heal'); }
-  if (m.debuff) for (const [k, v] of Object.entries(m.debuff)) {
-    addSt(p.st, k, v); cb.justApplied.add(k);
-    fx('hero', `${STATUS_INFO[k].icon} ${STATUS_INFO[k].name}`, 'debuff'); sfx('debuff');
+  if (m.debuff) {
+    for (const [k, v] of Object.entries(m.debuff)) {
+      addSt(p.st, k, v); cb.justApplied.add(k);
+      fx('hero', `${STATUS_INFO[k].icon} ${STATUS_INFO[k].name}`, 'debuff'); sfx('debuff');
+    }
+    if (p.st.fearless) { G.block(p.st.fearless); G.aware(1); fx('hero', '🐺 Страх побеждён', 'buff'); }
   }
   if (m.drain) {
     const n = Math.max(0, Math.min(p.st.aware || 0, m.drain) - (hasRelic('mirror') ? 1 : 0));
@@ -1377,7 +1388,7 @@ async function doEnemyMove(e) {
       const str = Math.min(n, m.drainStr || n);
       addSt(p.st, 'aware', -n); addSt(e.st, 'strength', str);
       fx('hero', `-${n} 👁️`, 'drain'); fx(e.uid, `съел осознание: 💪 +${str}`, 'drain'); sfx('drain');
-    } else if ((p.st.aware || 0) > 0 && hasRelic('mirror')) fx('hero', '🪞 отражено', 'buff');
+    } else if ((p.st.aware || 0) > 0 && hasRelic('mirror')) fx('hero', '💠 отражено', 'buff');
   }
   if (m.addCards) {
     for (let i = 0; i < m.addCards.n; i++) {
@@ -1516,7 +1527,7 @@ function updateCombat() {
   const et = document.getElementById('endTurn');
   et.disabled = cb.busy || cb.over;
   et.textContent = cb.busy && !cb.over ? 'Ход летунов…' : 'Завершить ход';
-  et.classList.toggle('nudge', !cb.busy && !cb.over && !cb.hand.some(c => !CARDS[c.id].unplayable && costOf(c) <= p.energy));
+  et.classList.toggle('nudge', !cb.busy && !cb.over && !cb.hand.some(c => !whyNot(c)));
   document.getElementById('hint').textContent = cb.potionAim !== null ? 'Выберите цель для зелья' : targeting ? 'Выберите цель' : '';
   document.querySelectorAll('.enemies .unit').forEach(u => u.classList.toggle('targetable', (targeting || cb.potionAim !== null) && !u.classList.contains('dead')));
   renderHand();
@@ -1533,7 +1544,7 @@ function renderHand() {
     const mid = (n - 1) / 2, off = i - mid;
     const x = off * spread, rot = off * 3.2, y = Math.abs(off) * Math.abs(off) * 2.6;
     const d = CARDS[c.id];
-    const playable = !d.unplayable && costOf(c) <= cb.p.energy && !cb.busy;
+    const playable = !whyNot(c) && !cb.busy;
     const cls = [playable ? 'playable' : 'unplayable', cb.selected === c.uid ? 'sel' : ''].join(' ');
     const tmp = document.createElement('div');
     tmp.innerHTML = cardHTML(c, {
@@ -1571,8 +1582,8 @@ function selectCard(uid) {
   if (!c) return;
   const d = CARDS[c.id];
   if (cb.selected === uid) { cb.selected = null; updateCombat(); return; }
-  if (d.unplayable) { toast('Эту карту нельзя разыграть'); return; }
-  if (costOf(c) > cb.p.energy) { toast('Недостаточно энергии'); return; }
+  const why = whyNot(c);
+  if (why) { toast(why); return; }
   if (d.target === 'enemy') {
     const a = alive();
     if (a.length === 1) { playCard(uid, a[0]); return; }
@@ -1707,7 +1718,8 @@ document.addEventListener('pointermove', e => {
     const c = cb && cb.hand.find(x => x.uid === drag.uid);
     if (!c || cb.busy || cb.playing) { drag = null; return; }
     const d = CARDS[c.id];
-    if (d.unplayable || costOf(c) > cb.p.energy) { toast(d.unplayable ? 'Эту карту нельзя разыграть' : 'Недостаточно энергии'); drag = null; suppressClick = true; return; }
+    const why = whyNot(c);
+    if (why) { toast(why); drag = null; suppressClick = true; return; }
     drag.active = true;
     drag.aim = d.target === 'enemy';
     cb.selected = null;

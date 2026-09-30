@@ -12,7 +12,8 @@ const HEROES = {
     relic: 'notebook',
     pool: ['stalk', 'notdoing', 'folly', 'gait', 'silence', 'hunt',
            'erase', 'mescalito', 'seeing', 'recap', 'ally', 'impecc',
-           'shift', 'death', 'leap'],
+           'shift', 'death', 'leap',
+           'twin', 'dream', 'clarity', 'fearless', 'might'],
   },
   donjuan: {
     id: 'donjuan', name: 'Дон Хуан Матус', title: 'Нагваль', playable: false,
@@ -48,9 +49,11 @@ const STATUS_INFO = {
   vulnerable: { icon: '💔', name: 'Уязвимость', tip: 'Получает +50% урона от атак. {turns}', debuff: true },
   weak:       { icon: '🥀', name: 'Слабость', tip: 'Атаки наносят на 25% меньше урона. {turns}', debuff: true },
   aware:      { icon: '👁️', name: 'Осознание', tip: 'Накоплено осознания: {n}. Летуны могут его съесть.' },
-  impecc:     { icon: '🪶', name: 'Безупречность', tip: 'В конце хода получаете {n} Защиты.' },
+  impecc:     { icon: '⚖️', name: 'Безупречность', tip: 'В конце хода получаете {n} Защиты.' },
   ally:       { icon: '💨', name: 'Союзник', tip: 'В конце хода наносит {n} урона случайному врагу.' },
   death:      { icon: '💀', name: 'Смерть-советчица', tip: 'В начале хода получаете {n} Личной силы.' },
+  dream:      { icon: '💤', name: 'Сновидение', tip: 'В начале следующего хода возьмёте ещё {n} карт.' },
+  fearless:   { icon: '🐺', name: 'Победа над страхом', tip: 'Когда враг накладывает на вас Слабость или Уязвимость: +{n} Защиты и +1 Осознание.' },
 };
 
 // ============================================================
@@ -121,7 +124,29 @@ const CARDS = {
     play: (g, u, t) => { if (g.hit(t, u ? 18 : 14)) { g.energy(1); g.aware(1); } },
   },
 
+  twin: {
+    name: 'Двойной выпад', type: 'attack', rarity: 'common', cost: 1, target: 'enemy', art: '🗡️',
+    desc: (u, f) => `Нанести ${f.d(u ? 5 : 4)} урона 2 раза.`,
+    play: (g, u, t) => { g.hit(t, u ? 5 : 4); if (t && !t.dead) g.hit(t, u ? 5 : 4); },
+  },
+  dream: {
+    name: 'Сновидение', type: 'skill', rarity: 'common', cost: 1, art: '💤',
+    desc: (u, f) => `Получить ${f.b(u ? 9 : 6)} Защиты. В начале следующего хода взять 1 дополнительную карту.`,
+    play: (g, u) => { g.block(u ? 9 : 6); g.buffSelf('dream', 1); },
+  },
+
   // ---------- необычные ----------
+  clarity: {
+    name: 'Ясность', type: 'skill', rarity: 'uncommon', cost: 0, art: '🔆',
+    desc: u => `Потратить 2 Осознания: взять ${u ? 3 : 2} карты.`,
+    requires: g => g.getAware() >= 2 ? null : 'Нужно 2 Осознания',
+    play: (g, u) => { g.spendAware(2); g.draw(u ? 3 : 2); },
+  },
+  fearless: {
+    name: 'Победа над страхом', type: 'power', rarity: 'uncommon', cost: 1, art: '🐺',
+    desc: u => `Способность. Когда на вас накладывают Слабость или Уязвимость: +${u ? 5 : 3} Защиты, +1 Осознание.`,
+    play: (g, u) => g.power('fearless', u ? 5 : 3),
+  },
   erase: {
     name: 'Стирание личной истории', type: 'skill', rarity: 'uncommon', cost: 1, art: '🧽',
     desc: (u, f) => `Получить ${f.b(u ? 15 : 11)} Защиты. Снять с себя Слабость и Уязвимость.`,
@@ -148,7 +173,7 @@ const CARDS = {
     play: (g, u) => g.power('ally', u ? 7 : 5),
   },
   impecc: {
-    name: 'Безупречность', type: 'power', rarity: 'uncommon', cost: 1, art: '🪶',
+    name: 'Безупречность', type: 'power', rarity: 'uncommon', cost: 1, art: '⚖️',
     desc: u => `Способность. В конце каждого хода получайте ${u ? 4 : 3} Защиты.`,
     play: (g, u) => g.power('impecc', u ? 4 : 3),
   },
@@ -164,6 +189,12 @@ const CARDS = {
     name: 'Смерть — советчица', type: 'power', rarity: 'rare', cost: 3, art: '💀',
     desc: u => `Способность. В начале каждого хода получайте ${u ? 3 : 2} Личной силы.`,
     play: (g, u) => g.power('death', u ? 3 : 2),
+  },
+  might: {
+    name: 'Сила', type: 'skill', rarity: 'rare', cost: u => u ? 1 : 2, art: '⚡', exhaust: true,
+    desc: (u, f) => `Удвоить ваше Осознание${f.aw()}. Сгорает.`,
+    requires: g => g.getAware() >= 1 ? null : 'Нет Осознания',
+    play: g => g.aware(g.getAware()),
   },
   leap: {
     name: 'Прыжок в бездну', type: 'attack', rarity: 'rare', cost: 3, target: 'enemy', art: '🏔️', exhaust: true,
@@ -202,7 +233,7 @@ const RELICS = {
     combatStart: g => g.buffSelf('strength', 1),
   },
   feather: {
-    name: 'Перо ворона', icon: '🪶',
+    name: 'Перо ворона', icon: '🐦',
     desc: 'В начале каждого боя получите 10 Защиты.',
     combatStart: g => g.block(10),
   },
@@ -247,7 +278,7 @@ const RELICS = {
     onSpendAware: (g, n) => g.block(2 * n),
   },
   mirror: {
-    name: 'Обсидиановое зеркало', icon: '🪞',
+    name: 'Обсидиановое зеркало', icon: '💠',
     desc: 'Летуны съедают на 1 Осознание меньше.',
   },
   poncho: {
@@ -264,7 +295,7 @@ const RELICS = {
     desc: 'Торговец делает вам скидку 25%.',
   },
   stone: {
-    name: 'Камень силы', icon: '🪨',
+    name: 'Камень силы', icon: '🗿',
     desc: '+1 энергия каждый ход. Но летуны начинают бой с 1 Личной силой.',
   },
   mat: {
