@@ -32,6 +32,33 @@ window.addEventListener('resize', fitStage);
 fitStage();
 
 // ============================================================
+//  Переходы между экранами: старый экран уходит «призраком» поверх нового
+// ============================================================
+function beginSwap(kind = 'fade') {
+  tooltip.style.display = 'none';
+  if (app.firstChild) {
+    const ghost = document.createElement('div');
+    ghost.className = 'scr-ghost scr-ghost-' + kind;
+    while (app.firstChild) ghost.appendChild(app.firstChild);
+    stage.insertBefore(ghost, app.nextSibling);
+    setTimeout(() => ghost.remove(), 1300);
+  }
+  if (kind === 'combat' || kind === 'boss') {
+    const w = document.createElement('div');
+    w.className = 'wipe wipe-' + kind;
+    w.innerHTML = '<i></i><i></i><b></b>';
+    fxLayer.appendChild(w);
+    setTimeout(() => w.remove(), 1500);
+  }
+  app.className = '';
+  void app.offsetWidth;
+  app.className = 'enter-' + kind;
+}
+// Плавающие светлячки/искры на фоне
+const motes = (n = 16, cls = '') => `<div class="motes ${cls}">${Array.from({ length: n }, () =>
+  `<i style="--x:${rnd(0, 100)}%;--d:${rnd(9, 22)}s;--dl:-${rnd(0, 22)}s;--s:${rnd(2, 5)}px;--dx:${rnd(-80, 80)}px"></i>`).join('')}</div>`;
+
+// ============================================================
 //  Звук (синтез, без файлов)
 // ============================================================
 let actx = null, muted = localStorage.getItem('nagual_mute') === '1';
@@ -271,12 +298,19 @@ function showHelp() {
     <p>Пройдите пустыню летунов снизу вверх по карте и победите <b>Хозяина летунов</b>.</p>
     <p><b>Бой.</b> Каждый ход у вас 3 энергии и 5 карт. Кликните карту, затем врага (если враг один — карта играется сразу).
       Над врагами видно их <b>намерение</b>: 🗡 атака, 🛡 защита, ⬆ усиление, 🌀 проклятие, 👁 пожирание осознания.</p>
-    <p><b>Осознание 👁️</b> — ресурс Кастанеды. Копите его и тратьте картой «Сдвиг точки сборки» или усиливайте «Перепросмотр».
+    <p><b>Осознание 👁️</b> — ресурс Кастанеды. Копите его и тратьте: «Вспышка осознания» бьёт всех врагов, «Удар намерения» тратит 1 очко на второй удар, «Сдвиг точки сборки» — мощный одиночный удар, «Перепросмотр» даёт Защиту.
       Но летуны питаются осознанием: съеденное делает их сильнее.</p>
     <p><b>Карта.</b> ⚔ бой · 👹 элита (реликвия) · ❓ событие · 🔥 место силы (отдых или улучшение карты) · 💰 торговец · 🎁 сундук.</p>
     <p><b>Клавиши:</b> 1–9, 0 — выбрать карту · E / Пробел — закончить ход · Esc / ПКМ — отмена.</p>
   </div>
   <button class="btn" data-act="closeOverlay">Понятно</button>`);
+}
+
+function sigilSVG() {
+  const rays = Array.from({ length: 24 }, (_, i) => `<line x1="200" y1="40" x2="200" y2="${i % 2 ? 70 : 58}" transform="rotate(${i * 15} 200 200)"/>`).join('');
+  return `<svg viewBox="0 0 400 400"><g class="sg-outer">${rays}<circle cx="200" cy="200" r="150"/><circle cx="200" cy="200" r="138" stroke-dasharray="4 10"/></g>
+    <g class="sg-inner"><path d="M200 95 L291 252 L109 252 Z"/><path d="M200 305 L109 148 L291 148 Z"/><circle cx="200" cy="200" r="100"/></g>
+    <g class="sg-eye"><path d="M140 200 Q200 150 260 200 Q200 250 140 200 Z"/><circle cx="200" cy="200" r="18"/></g></svg>`;
 }
 
 // ============================================================
@@ -289,8 +323,10 @@ function showTitle() {
     cont: () => { run = saved; showMap(); },
     help: () => showHelp(),
   };
+  beginSwap('fade');
   app.innerHTML = `<div class="screen title-screen">
     <div class="sky"></div><div class="stars"></div><div class="moon"></div>
+    <div class="sigil">${sigilSVG()}</div>${motes(22)}
     <div class="title-flyers">${[0, 1, 2, 3].map(i => `<div class="tf tf${i}">${flyerSVG({ w: 120 - i * 18, body: '#05030a', body2: '#1a1026', wing: '#000', eye: '#ffd24d' })}</div>`).join('')}</div>
     <div class="mountains"></div>
     <div class="title-box">
@@ -310,11 +346,12 @@ function showTitle() {
 //  Экран: выбор героя
 // ============================================================
 function showSelect() {
-  let sel = 'castaneda';
+  let sel = 'castaneda', first = true;
   const render = () => {
     const h = HEROES[sel];
+    if (first) { beginSwap('fade'); first = false; }
     app.innerHTML = `<div class="screen select-screen">
-      <div class="sky dusk"></div><div class="mountains"></div>
+      <div class="sky dusk"></div><div class="mountains"></div>${motes(14)}
       <h2 class="screen-title">Выберите путь</h2>
       <div class="hero-choice">
         ${Object.values(HEROES).map(x => `<div class="hero-card ${x.id === sel ? 'sel' : ''} ${x.playable ? '' : 'locked'}" data-act="pickHero" data-id="${x.id}">
@@ -330,7 +367,7 @@ function showSelect() {
           <p>${h.desc}</p>
           ${h.playable ? `<p>❤️ ${h.hp} здоровья · 💰 ${h.gold} песо</p>
             <p>Стартовая реликвия: ${relicHTML(h.relic)} <b>${RELICS[h.relic].name}</b> — ${RELICS[h.relic].desc}</p>
-            <p class="muted">Стартовая колода: 5 × Удар, 4 × Оборона, Полевые заметки.</p>`
+            <p class="muted">Стартовая колода: 4 × Удар, 4 × Оборона, Удар намерения, Полевые заметки, Вспышка осознания.</p>`
             : '<p class="muted">Этот герой ещё проходит обучение у дона Хуана. Скоро!</p>'}
           <div class="row">
             <button class="btn ghost" data-act="back">Назад</button>
@@ -392,7 +429,7 @@ function rewardCards(n = 3, elite = false, rarity = null) {
 // ============================================================
 function sceneHTML(art, title, text, body) {
   return `${topBar()}<div class="screen scene">
-    <div class="sky night"></div><div class="mountains"></div>
+    <div class="sky night"></div><div class="stars"></div><div class="mountains"></div>${motes(16)}
     <div class="scene-box">
       <div class="scene-art">${art}</div>
       <div class="scene-text"><h2>${title}</h2><p>${text}</p>${body}</div>
@@ -419,6 +456,7 @@ function runEvent(ev) {
   const opts = ev.options(evApi);
   const done = text => {
     actions = { next: () => showMap() };
+    beginSwap('soft');
     app.innerHTML = sceneHTML(ev.art, ev.title, text, `<div class="options"><button class="opt" data-act="next"><b>Продолжить</b></button></div>`);
   };
   actions = {
@@ -428,6 +466,7 @@ function runEvent(ev) {
       o.go(done);
     },
   };
+  beginSwap('zoom');
   app.innerHTML = sceneHTML(ev.art, ev.title, ev.text, `<div class="options">${opts.map((o, i) => {
     const ok = !o.can || o.can();
     return `<button class="opt ${ok ? '' : 'disabled'}" data-act="opt" data-i="${i}"><b>[${o.label}]</b> <span>${o.sub}</span></button>`;
@@ -528,7 +567,8 @@ function showMap() {
     for (const nk of n.next) {
       const m = nodes[nk];
       const walked = onPath.has(k) && onPath.has(nk) && run.path.indexOf(nk) === run.path.indexOf(k) + 1;
-      lines += `<line x1="${nx(n)}" y1="${ny(n)}" x2="${nx(m)}" y2="${ny(m)}" class="${walked ? 'walked' : ''}"/>`;
+      const next = run.pos === k && avail.includes(nk);
+      lines += `<line x1="${nx(n)}" y1="${ny(n)}" x2="${nx(m)}" y2="${ny(m)}" class="${walked ? 'walked' : next ? 'next' : ''}"/>`;
     }
     if (n.r === ROWS - 1) lines += `<line x1="${nx(n)}" y1="${ny(n)}" x2="${boss.x}" y2="${boss.y + 50}" class="${run.pos === 'boss' && run.path[run.path.length - 2] === k ? 'walked' : ''}"/>`;
   }
@@ -539,11 +579,18 @@ function showMap() {
       <circle r="24"/><text y="8">${info.icon}</text><title>${info.name}</title></g>`;
   }).join('');
   const bossCls = avail.includes('boss') ? 'avail' : '';
+  let going = false;
   actions = {
-    node: el => enterNode(el.dataset.k),
+    node: el => {
+      if (going) return;
+      going = true;
+      el.classList.add('chosen');
+      setTimeout(() => enterNode(el.dataset.k), 320);
+    },
   };
+  beginSwap('rise');
   app.innerHTML = `${topBar()}<div class="screen map-screen">
-    <div class="sky night"></div>
+    <div class="sky night"></div><div class="stars"></div>${motes(18)}
     <div class="map-legend">
       <h3>Акт I</h3><p class="muted">Пустыня летунов</p>
       ${Object.entries(NODE_INFO).map(([, v]) => `<div>${v.icon} ${v.name}</div>`).join('')}
@@ -598,8 +645,10 @@ function showRest() {
   };
   const after = text => {
     actions = { next: () => showMap() };
+    beginSwap('soft');
     app.innerHTML = sceneHTML('🔥', 'Место силы', text, `<div class="options"><button class="opt" data-act="next"><b>Продолжить</b></button></div>`);
   };
+  beginSwap('zoom');
   app.innerHTML = sceneHTML('🔥', 'Место силы',
     'Ты нашёл место, где земля отдаёт силу. Летуны не решаются приблизиться к огню.',
     `<div class="options">
@@ -618,10 +667,12 @@ function showTreasure() {
     open: () => {
       if (relic) gainRelic(relic); run.gold += gold; sfx('gold');
       actions = { next: () => showMap() };
+      beginSwap('soft');
       app.innerHTML = sceneHTML('🎁', 'Сундук', `Внутри — ${gold} песо${relic ? ` и ${RELICS[relic].icon} <b>${RELICS[relic].name}</b>: ${RELICS[relic].desc}` : ''}.`,
         `<div class="options"><button class="opt" data-act="next"><b>Продолжить</b></button></div>`);
     },
   };
+  beginSwap('zoom');
   app.innerHTML = sceneHTML('🧰', 'Сундук', 'Среди камней стоит старый окованный сундук. Похоже, кто-то спрятал его от летунов.',
     `<div class="options"><button class="opt" data-act="open"><b>[Открыть]</b></button></div>`);
 }
@@ -643,9 +694,11 @@ function showShop() {
   stock.cards[rnd(0, stock.cards.length - 1)].sale = true;
   stock.cards.forEach(x => { if (x.sale) x.price = Math.floor(x.price / 2); });
 
+  let first = true;
   const render = () => {
+    if (first) { beginSwap('zoom'); first = false; }
     app.innerHTML = `${topBar()}<div class="screen shop-screen">
-      <div class="sky night"></div>
+      <div class="sky night"></div>${motes(12)}
       <div class="shop-keeper"><div class="sk-art">🧙‍♂️</div><p>«Всё, что нужно воину, — здесь. Только не торгуйся, это неблагородно»</p></div>
       <div class="shop-goods">
         <div class="shop-cards">${stock.cards.map((x, i) => `<div class="ware ${x.sold ? 'sold' : ''}">
@@ -715,7 +768,76 @@ const addSt = (st, k, n) => { st[k] = (st[k] || 0) + n; if (st[k] <= 0) delete s
 
 // ---- эффекты на экране ----
 let fxq = [];
-const fx = (unit, text, cls = '', anim = null) => fxq.push({ unit, text, cls, anim });
+const fx = (unit, text, cls = '', anim = null, extra = null) => fxq.push({ unit, text, cls, anim, extra });
+
+// центр элемента в координатах сцены 1280×720
+function stagePt(el, fy = 0.5) {
+  if (!el) return { x: 640, y: 360 };
+  const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect();
+  return { x: (r.left + r.width / 2 - s.left) / scale, y: (r.top + r.height * fy - s.top) / scale };
+}
+function burst(el, color, n = 18, fy = 0.45) {
+  const p = stagePt(el, fy);
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement('i');
+    const a = Math.random() * Math.PI * 2, r = rnd(50, 150);
+    d.className = 'spark';
+    d.style.cssText = `left:${p.x}px;top:${p.y}px;--dx:${Math.cos(a) * r}px;--dy:${Math.sin(a) * r - 30}px;--c:${color};--s:${rnd(3, 8)}px;animation-duration:${rnd(550, 950)}ms`;
+    fxLayer.appendChild(d);
+    setTimeout(() => d.remove(), 1000);
+  }
+}
+function effectAt(el, cls, fy = 0.45, ms = 700, style = '') {
+  const p = stagePt(el, fy);
+  const d = document.createElement('div');
+  d.className = cls;
+  d.style.cssText = `left:${p.x}px;top:${p.y}px;${style}`;
+  fxLayer.appendChild(d);
+  setTimeout(() => d.remove(), ms);
+}
+function runExtra(el, extra) {
+  if (extra === 'slash') effectAt(el.querySelector('.sprite') || el, 'slash', 0.5, 450, `--rot:${rnd(-55, -25)}deg`);
+  else if (extra === 'shake') {
+    app.classList.remove('shake'); void app.offsetWidth; app.classList.add('shake');
+    const fl = document.createElement('div'); fl.className = 'hurtflash'; fxLayer.appendChild(fl); setTimeout(() => fl.remove(), 600);
+  }
+  else if (extra.startsWith('ring:')) effectAt(el.querySelector('.sprite') || el, 'ring', 0.5, 800, `--c:${extra.slice(5)}`);
+  else if (extra.startsWith('burst:')) burst(el.querySelector('.sprite') || el, extra.slice(6), extra.includes('#b36bff') ? 34 : 16);
+}
+// Полёт карты из руки: в цель, в сброс, в героя или сгорание
+function flyCard(el, dest, mode, delay = 0) {
+  if (!el) return;
+  const p = stagePt(el);
+  const clone = el.cloneNode(true);
+  clone.className = clone.className.replace(/\b(in-hand|sel|playable|unplayable|drawn)\b/g, '') + ' flying';
+  clone.removeAttribute('data-act'); clone.removeAttribute('data-tip'); clone.removeAttribute('style');
+  clone.style.left = (p.x - 75) + 'px'; clone.style.top = (p.y - 105) + 'px';
+  fxLayer.appendChild(clone);
+  const dx = dest.x - p.x, dy = dest.y - p.y;
+  let frames, dur = 480;
+  if (mode === 'attack') frames = [
+    { transform: 'scale(1.2)', opacity: 1 },
+    { transform: `translate(${dx * .2}px, ${dy * .2 - 110}px) scale(1.15) rotate(-5deg)`, opacity: 1, offset: .35 },
+    { transform: `translate(${dx}px, ${dy}px) scale(.3) rotate(28deg)`, opacity: 0 }];
+  else if (mode === 'power') frames = [
+    { transform: 'scale(1.2)', opacity: 1, filter: 'brightness(1)' },
+    { transform: `translate(${dx * .3}px, -150px) scale(1.3)`, opacity: 1, filter: 'brightness(1.6)', offset: .4 },
+    { transform: `translate(${dx}px, ${dy}px) scale(.15)`, opacity: 0, filter: 'brightness(3)' }];
+  else if (mode === 'burn') { dur = 700; frames = [
+    { transform: 'scale(1.15)', opacity: 1, filter: 'none' },
+    { transform: 'translate(0, -60px) scale(1.15)', opacity: 1, filter: 'brightness(1.8) sepia(1) saturate(3) hue-rotate(-25deg)', offset: .4 },
+    { transform: 'translate(0, -150px) scale(1.05)', opacity: 0, filter: 'brightness(3) sepia(1) saturate(4) hue-rotate(-30deg) blur(6px)' }]; }
+  else if (mode === 'discard') { dur = 420; frames = [
+    { transform: 'scale(1)', opacity: 1 },
+    { transform: `translate(${dx}px, ${dy}px) scale(.22) rotate(50deg)`, opacity: .3 }]; }
+  else frames = [
+    { transform: 'scale(1.2)', opacity: 1 },
+    { transform: `translate(${(640 - p.x) * .5}px, -140px) scale(1.2)`, opacity: 1, offset: .4 },
+    { transform: `translate(${dx}px, ${dy}px) scale(.22) rotate(40deg)`, opacity: 0 }];
+  const a = clone.animate(frames, { duration: dur, delay, easing: 'cubic-bezier(.35,.7,.35,1)', fill: 'both' });
+  a.onfinish = () => clone.remove();
+  if (mode === 'burn') setTimeout(() => burst(clone, '#ff9a3c', 14, 0.3), delay + dur * .45);
+}
 function flushFx() {
   const stRect = stage.getBoundingClientRect();
   const perUnit = {};
@@ -723,6 +845,7 @@ function flushFx() {
     const el = document.querySelector(`[data-unit="${f.unit}"]`);
     if (!el) continue;
     if (f.anim) { el.classList.remove(f.anim); void el.offsetWidth; el.classList.add(f.anim); }
+    if (f.extra) runExtra(el, f.extra);
     if (!f.text) continue;
     const r = el.getBoundingClientRect();
     const k = perUnit[f.unit] = (perUnit[f.unit] || 0) + 1;
@@ -735,6 +858,13 @@ function flushFx() {
     setTimeout(() => d.remove(), 1300);
   }
   fxq = [];
+}
+function banner(text, kind = '') {
+  const b = document.createElement('div');
+  b.className = 'banner ' + kind;
+  b.innerHTML = `<span>${text}</span>`;
+  fxLayer.appendChild(b);
+  setTimeout(() => b.remove(), 1300);
 }
 function toast(text) {
   const t = document.createElement('div');
@@ -750,12 +880,13 @@ function damageEnemy(e, d) {
   e.block -= blocked;
   const rest = d - blocked;
   e.hp -= rest;
-  fx(e.uid, rest > 0 ? `-${rest}` : 'Блок', rest > 0 ? 'dmg' : 'blk', 'hurt');
+  fx(e.uid, rest > 0 ? `-${rest}` : 'Блок', rest > 0 ? 'dmg' : 'blk', 'hurt', rest > 0 ? 'slash' : 'ring:#8fc8ff');
   sfx(rest > 0 ? 'hit' : 'block');
   if (e.hp <= 0) {
     e.hp = 0; e.dead = true; run.stats.kills++;
     sfx('death');
-    if (e.def.boss) cb.enemies.forEach(m => { if (!m.dead) { m.dead = true; m.hp = 0; fx(m.uid, 'бежит!', 'info'); } });
+    fx(e.uid, '', '', null, 'burst:#b36bff');
+    if (e.def.boss) cb.enemies.forEach(m => { if (!m.dead) { m.dead = true; m.hp = 0; fx(m.uid, 'бежит!', 'info', null, 'burst:#b36bff'); } });
     return true;
   }
   return false;
@@ -766,7 +897,7 @@ function damagePlayer(d) {
   p.block -= blocked;
   const rest = d - blocked;
   run.hp = Math.max(0, run.hp - rest);
-  fx('hero', rest > 0 ? `-${rest}` : 'Блок', rest > 0 ? 'dmg' : 'blk', 'hurt');
+  fx('hero', rest > 0 ? `-${rest}` : 'Блок', rest > 0 ? 'dmg' : 'blk', 'hurt', rest >= 8 ? 'shake' : rest > 0 ? 'slash' : 'ring:#8fc8ff');
   sfx(rest > 0 ? 'hurt' : 'block');
 }
 const G = {
@@ -776,18 +907,21 @@ const G = {
     return damageEnemy(t, playerDmg(base, t));
   },
   hitAll(base) { alive().forEach(e => damageEnemy(e, playerDmg(base, e))); },
-  block(n) { cb.p.block += n; fx('hero', `+${n} 🛡`, 'blk'); sfx('block'); },
+  block(n) { cb.p.block += n; fx('hero', `+${n} 🛡`, 'blk', null, 'ring:#8fc8ff'); sfx('block'); },
   draw(n) { drawCards(n); },
   energy(n) { cb.p.energy += n; fx('hero', `+${n} ⚡`, 'info'); },
-  aware(n) { addSt(cb.p.st, 'aware', n); fx('hero', `+${n} 👁️`, 'aware'); sfx('aware'); },
+  aware(n) { addSt(cb.p.st, 'aware', n); fx('hero', `+${n} 👁️`, 'aware', null, 'burst:#9fe2ff'); sfx('aware'); },
   getAware() { return cb.p.st.aware || 0; },
-  spendAware() { delete cb.p.st.aware; },
+  spendAware(n = Infinity) {
+    const k = Math.min(n, cb.p.st.aware || 0);
+    if (k > 0) { addSt(cb.p.st, 'aware', -k); fx('hero', `-${k} 👁️`, 'aware', null, 'ring:#9fe2ff'); }
+  },
   debuff(t, k, n) { if (t && !t.dead) { addSt(t.st, k, n); fx(t.uid, `${STATUS_INFO[k].icon} ${STATUS_INFO[k].name}`, 'debuff'); sfx('debuff'); } },
   debuffAll(k, n) { alive().forEach(e => G.debuff(e, k, n)); },
   buffSelf(k, n) { addSt(cb.p.st, k, n); fx('hero', `${STATUS_INFO[k].icon} +${n}`, 'buff'); sfx('buff'); },
   cleanse() { delete cb.p.st.weak; delete cb.p.st.vulnerable; fx('hero', 'Очищение', 'buff'); },
   loseHp(n) { run.hp = Math.max(0, run.hp - n); fx('hero', `-${n}`, 'dmg', 'hurt'); },
-  power(k, n) { addSt(cb.p.st, k, n); fx('hero', `${STATUS_INFO[k].icon} ${STATUS_INFO[k].name}`, 'buff'); sfx('buff'); },
+  power(k, n) { addSt(cb.p.st, k, n); fx('hero', `${STATUS_INFO[k].icon} ${STATUS_INFO[k].name}`, 'buff', null, 'ring:#ffd27a'); sfx('buff'); },
 };
 
 function drawCards(n) {
@@ -795,10 +929,11 @@ function drawCards(n) {
     if (!cb.draw.length) {
       if (!cb.discard.length) break;
       cb.draw = shuffle(cb.discard); cb.discard = [];
+      fx('drawpile', 'Перемешивание', 'info', 'pulse');
     }
     const c = cb.draw.pop();
     if (cb.hand.length >= 10) { cb.discard.push(c); toast('Рука полна'); }
-    else cb.hand.push(c);
+    else { cb.hand.push(c); cb.fresh.add(c.uid); }
   }
 }
 
@@ -813,14 +948,14 @@ function startCombat(kind, list = null, bonusGold = 0) {
     enemies: list.map(mkEnemy),
     draw: shuffle(run.deck.map(c => ({ ...c }))), hand: [], discard: [], exhaust: [],
     p: { block: 0, energy: 0, maxEnergy: 3, st: {} },
-    turn: 0, selected: null, busy: true, justApplied: new Set(), over: false,
+    turn: 0, selected: null, busy: true, justApplied: new Set(), over: false, fresh: new Set(), playing: false,
   };
   actions = combatActions;
   renderCombatShell();
   run.relics.forEach(r => RELICS[r].combatStart && RELICS[r].combatStart(G));
   cb.enemies.forEach(chooseIntent);
   updateCombat();
-  setTimeout(() => startTurn(), 500);
+  setTimeout(() => startTurn(), 900);
 }
 
 function chooseIntent(e) {
@@ -841,19 +976,13 @@ function startTurn() {
   run.relics.forEach(r => RELICS[r].turnStart && RELICS[r].turnStart(G, cb.turn));
   cb.busy = false;
   sfx('turn');
-  banner(cb.turn === 1 ? (cb.kind === 'boss' ? 'Хозяин летунов' : 'Бой') : 'Ваш ход');
+  banner(cb.turn === 1 ? (cb.kind === 'boss' ? 'Хозяин летунов' : cb.kind === 'elite' ? 'Элитный летун' : 'Бой') : 'Ваш ход', cb.turn === 1 && cb.kind !== 'monster' ? 'danger' : '');
   updateCombat();
 }
 
-function banner(text) {
-  const b = document.createElement('div');
-  b.className = 'banner'; b.textContent = text;
-  fxLayer.appendChild(b);
-  setTimeout(() => b.remove(), 1100);
-}
 
 async function playCard(uid, target) {
-  if (cb.busy || cb.over) return;
+  if (cb.busy || cb.over || cb.playing) return;
   const i = cb.hand.findIndex(c => c.uid === uid);
   if (i < 0) return;
   const c = cb.hand[i], d = CARDS[c.id];
@@ -864,6 +993,19 @@ async function playCard(uid, target) {
   cb.hand.splice(i, 1);
   cb.selected = null;
   sfx('card');
+  const el = document.querySelector(`#hand .card[data-uid="${uid}"]`);
+  const tgt = target ? document.querySelector(`[data-unit="${target.uid}"] .sprite`) : null;
+  const mode = d.type === 'power' ? 'power' : d.type === 'attack' ? 'attack' : d.exhaust ? 'burn' : 'skill';
+  const dest = mode === 'power' ? stagePt(document.querySelector('[data-unit="hero"] .sprite'), .4)
+    : mode === 'attack' ? stagePt(tgt || document.getElementById('enemies'), .45)
+    : stagePt(document.querySelector('.discard-pile'));
+  flyCard(el, dest, mode);
+  if (el) el.remove();
+  cb.playing = true;
+  updateCombat();
+  await sleep(mode === 'attack' ? 190 : 150);
+  cb.playing = false;
+  if (!cb || cb.over) return;
   if (d.type === 'attack') fx('hero', '', '', 'lunge');
   d.play(G, c.up, target);
   if (d.type === 'power') { /* способности исчезают */ }
@@ -877,12 +1019,12 @@ async function playCard(uid, target) {
 async function checkCombatEnd() {
   if (cb.over) return true;
   if (run.hp <= 0) { cb.over = true; await sleep(700); gameOver(); return true; }
-  if (!alive().length) { cb.over = true; await sleep(800); winCombat(); return true; }
+  if (!alive().length) { cb.over = true; updateCombat(); await sleep(500); banner('Победа', 'win'); await sleep(1100); winCombat(); return true; }
   return false;
 }
 
 async function endTurn() {
-  if (cb.busy || cb.over) return;
+  if (cb.busy || cb.over || cb.playing) return;
   cb.busy = true; cb.selected = null;
   const p = cb.p;
   // конец хода игрока
@@ -891,6 +1033,11 @@ async function endTurn() {
     const t = pick(alive());
     if (t) { damageEnemy(t, p.st.ally); fx('hero', '💨', 'info'); }
   }
+  const pile = stagePt(document.querySelector('.discard-pile'));
+  [...document.querySelectorAll('#hand .card')].forEach((el, k) => {
+    const c = cb.hand.find(x => x.uid === +el.dataset.uid);
+    flyCard(el, pile, c && CARDS[c.id].ethereal ? 'burn' : 'discard', k * 55);
+  });
   for (const c of cb.hand) {
     if (CARDS[c.id].ethereal) { cb.exhaust.push(c); fx('hero', `${CARDS[c.id].name} сгорает`, 'info'); }
     else cb.discard.push(c);
@@ -898,7 +1045,9 @@ async function endTurn() {
   cb.hand = [];
   updateCombat();
   if (await checkCombatEnd()) return;
-  await sleep(450);
+  await sleep(500);
+  banner('Ход летунов', 'enemy');
+  await sleep(700);
 
   // ход врагов
   for (const e of alive()) e.block = 0;
@@ -991,16 +1140,31 @@ function statusesHTML(st) {
     return `<span class="st ${s.debuff ? 'bad' : ''}" data-tip="${esc(`<b>${s.name}</b><br>${s.tip.replace('{n}', n)}`)}">${s.icon}<b>${n}</b></span>`;
   }).join('');
 }
-function barHTML(hp, max, block) {
-  return `<div class="bar ${block ? 'has-block' : ''}"><div class="fill" style="width:${Math.max(0, hp / max * 100)}%"></div><span>${hp}/${max}</span>
-    ${block ? `<div class="blockbadge">${block}</div>` : ''}</div>`;
+function updateBar(box, hp, max, block) {
+  let bar = box.querySelector('.bar');
+  if (!bar) {
+    box.innerHTML = '<div class="bar"><div class="lag"></div><div class="fill"></div><span></span><div class="blockbadge"></div></div>';
+    bar = box.querySelector('.bar');
+  }
+  const w = Math.min(100, Math.max(0, hp / max * 100)) + '%';
+  bar.querySelector('.fill').style.width = w;
+  bar.querySelector('.lag').style.width = w;
+  bar.querySelector('span').textContent = `${hp}/${max}`;
+  bar.classList.toggle('has-block', block > 0);
+  const bb = bar.querySelector('.blockbadge');
+  if (+bb.dataset.v !== block) {
+    bb.dataset.v = block; bb.textContent = block;
+    if (block > 0) { bb.classList.remove('pop'); void bb.offsetWidth; bb.classList.add('pop'); }
+  }
 }
 
 // ---- отрисовка боя ----
 function renderCombatShell() {
   const h = HEROES[run.hero];
+  beginSwap(cb.kind === 'boss' ? 'boss' : 'combat');
   app.innerHTML = `${topBar()}<div class="screen combat ${cb.kind === 'boss' ? 'boss-fight' : ''}">
-    <div class="sky night"></div><div class="stars"></div><div class="mountains"></div><div class="ground"></div>
+    <div class="sky night"></div><div class="stars"></div><div class="moon small"></div><div class="mountains"></div><div class="ground"></div>
+    ${motes(14, 'embers')}<div class="fog"></div>
     <div class="field">
       <div class="unit hero" data-unit="hero">
         <div class="sprite"><img src="${h.body}" alt=""></div>
@@ -1010,11 +1174,11 @@ function renderCombatShell() {
     </div>
     <div class="hint" id="hint"></div>
     <div class="bottom">
-      <div class="energy" id="energy" data-tip="Энергия. Восстанавливается каждый ход."></div>
-      <button class="pile draw-pile" data-act="viewDraw" data-tip="Колода добора (порядок скрыт)">🂠<b id="drawN"></b></button>
+      <div class="energy" id="energy" data-tip="Энергия. Восстанавливается каждый ход."><div class="e-ring"></div><div class="e-core"></div></div>
+      <button class="pile draw-pile" data-unit="drawpile" data-act="viewDraw" data-tip="Колода добора (порядок скрыт)"><span class="pile-ico">🂠</span><b id="drawN"></b></button>
       <div class="hand" id="hand"></div>
-      <button class="pile discard-pile" data-act="viewDiscard" data-tip="Сброс">♻️<b id="discN"></b></button>
-      <button class="pile exhaust-pile" data-act="viewExhaust" data-tip="Сгоревшие карты">🔥<b id="exhN"></b></button>
+      <button class="pile discard-pile" data-act="viewDiscard" data-tip="Сброс"><span class="pile-ico">♻️</span><b id="discN"></b></button>
+      <button class="pile exhaust-pile" data-act="viewExhaust" data-tip="Сгоревшие карты"><span class="pile-ico">🔥</span><b id="exhN"></b></button>
       <button class="end-turn" id="endTurn" data-act="endTurn">Завершить ход</button>
     </div>
   </div>`;
@@ -1037,7 +1201,7 @@ function updateCombat() {
   refreshTop();
   const p = cb.p;
   const hero = document.querySelector('[data-unit="hero"]');
-  hero.querySelector('.u-bar').innerHTML = barHTML(run.hp, run.maxHp, p.block);
+  updateBar(hero.querySelector('.u-bar'), run.hp, run.maxHp, p.block);
   hero.querySelector('.statuses').innerHTML = statusesHTML(p.st);
   const sel = cb.selected ? cb.hand.find(c => c.uid === cb.selected) : null;
   const targeting = sel && CARDS[sel.id].target === 'enemy';
@@ -1048,18 +1212,29 @@ function updateCombat() {
     el.classList.toggle('targetable', !!targeting && !e.dead);
     const ii = intentInfo(e);
     const ie = el.querySelector('.intent');
-    ie.innerHTML = e.dead || cb.over ? '' : ii.html;
+    const ih = e.dead || cb.over ? '' : ii.html;
+    if (ie.dataset.h !== ih) {
+      ie.dataset.h = ih; ie.innerHTML = ih;
+      ie.classList.remove('fresh'); void ie.offsetWidth; if (ih) ie.classList.add('fresh');
+    }
     ie.dataset.tip = ii.tip;
-    el.querySelector('.u-bar').innerHTML = barHTML(e.hp, e.maxHp, e.block);
+    updateBar(el.querySelector('.u-bar'), e.hp, e.maxHp, e.block);
     el.querySelector('.statuses').innerHTML = statusesHTML(e.st);
   }
-  document.getElementById('energy').innerHTML = `<b>${p.energy}</b>/${p.maxEnergy}`;
+  const en = document.getElementById('energy');
+  if (en.dataset.v !== String(p.energy)) {
+    en.dataset.v = p.energy;
+    en.querySelector('.e-core').innerHTML = `<b>${p.energy}</b><span>/${p.maxEnergy}</span>`;
+    en.classList.remove('pulse'); void en.offsetWidth; en.classList.add('pulse');
+  }
+  en.classList.toggle('empty', p.energy === 0);
   document.getElementById('drawN').textContent = cb.draw.length;
   document.getElementById('discN').textContent = cb.discard.length;
   document.getElementById('exhN').textContent = cb.exhaust.length;
   const et = document.getElementById('endTurn');
   et.disabled = cb.busy || cb.over;
-  et.textContent = cb.busy && !cb.over ? 'Ход врагов…' : 'Завершить ход';
+  et.textContent = cb.busy && !cb.over ? 'Ход летунов…' : 'Завершить ход';
+  et.classList.toggle('nudge', !cb.busy && !cb.over && !cb.hand.some(c => !CARDS[c.id].unplayable && costOf(c) <= p.energy));
   document.getElementById('hint').textContent = targeting ? 'Выберите цель' : '';
   renderHand();
   flushFx();
@@ -1069,21 +1244,44 @@ function renderHand() {
   const hand = document.getElementById('hand');
   const n = cb.hand.length;
   const spread = Math.min(118, 760 / Math.max(1, n));
-  hand.innerHTML = cb.hand.map((c, i) => {
+  const old = new Map([...hand.children].map(el => [+el.dataset.uid, el]));
+  let k = 0;
+  cb.hand.forEach((c, i) => {
     const mid = (n - 1) / 2, off = i - mid;
     const x = off * spread, rot = off * 3.2, y = Math.abs(off) * Math.abs(off) * 2.6;
     const d = CARDS[c.id];
     const playable = !d.unplayable && costOf(c) <= cb.p.energy && !cb.busy;
     const cls = [playable ? 'playable' : 'unplayable', cb.selected === c.uid ? 'sel' : ''].join(' ');
-    return cardHTML(c, {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = cardHTML(c, {
       combat: true, cls: 'in-hand ' + cls, attrs: `data-act="card" data-silent="1" data-key="${i < 10 ? (i + 1) % 10 : ''}"`,
       style: `--x:${x}px;--y:${y}px;--r:${rot}deg;z-index:${cb.selected === c.uid ? 50 : i + 1}`,
     });
-  }).join('');
+    const ne = tmp.firstElementChild;
+    const el = old.get(c.uid);
+    if (el) {
+      old.delete(c.uid);
+      const drawing = el.classList.contains('drawn'), delay = el.style.animationDelay;
+      el.className = ne.className;
+      el.setAttribute('style', ne.getAttribute('style'));
+      if (drawing) { el.classList.add('drawn'); el.style.animationDelay = delay; }
+      if (el.innerHTML !== ne.innerHTML) el.innerHTML = ne.innerHTML;
+      if (ne.dataset.tip) el.dataset.tip = ne.dataset.tip;
+    } else {
+      if (cb.fresh.has(c.uid)) {
+        ne.classList.add('drawn');
+        ne.style.animationDelay = (k++ * 80) + 'ms';
+        ne.addEventListener('animationend', () => ne.classList.remove('drawn'), { once: true });
+      }
+      hand.appendChild(ne);
+    }
+  });
+  old.forEach(el => el.remove());
+  cb.fresh.clear();
 }
 
 function selectCard(uid) {
-  if (cb.busy || cb.over) return;
+  if (cb.busy || cb.over || cb.playing) return;
   const c = cb.hand.find(x => x.uid === uid);
   if (!c) return;
   const d = CARDS[c.id];
@@ -1143,10 +1341,13 @@ function winCombat() {
 }
 
 function showRewards(rewards, title) {
+  let first = true;
   const render = () => {
+    const intro = first;
+    if (first) { beginSwap('fade'); first = false; }
     app.innerHTML = `${topBar()}<div class="screen scene">
-      <div class="sky night"></div><div class="mountains"></div>
-      <div class="rewards">
+      <div class="sky night"></div><div class="mountains"></div>${motes(20)}
+      <div class="rewards ${intro ? '' : 'settled'}">
         <h2>${title}</h2>
         <p class="muted">Награды</p>
         ${rewards.map((r, i) => r.taken ? '' : `<button class="reward" data-act="take" data-i="${i}">${
@@ -1183,8 +1384,9 @@ function gameOver() {
   clearSave();
   cb = null;
   actions = { title: () => { run = null; showTitle(); }, again: () => { const h = run.hero; newRun(h); } };
+  beginSwap('death');
   app.innerHTML = `<div class="screen end-screen lose">
-    <div class="sky night"></div><div class="mountains"></div>
+    <div class="sky night"></div><div class="mountains"></div>${motes(24, 'ash')}
     <div class="end-box">
       <h1>Летуны насытились</h1>
       <p>Осознание Кастанеды поглощено. Но смерть — лишь советчица воина.</p>
@@ -1195,8 +1397,9 @@ function gameOver() {
 function showVictory() {
   clearSave();
   actions = { title: () => { run = null; showTitle(); } };
+  beginSwap('dawn');
   app.innerHTML = `<div class="screen end-screen win">
-    <div class="sky dawn"></div><div class="mountains"></div>
+    <div class="sky dawn"></div><div class="mountains"></div>${motes(24, 'gold')}
     <div class="end-box">
       <h1>Акт I пройден!</h1>
       <p>Хозяин летунов рассеялся в предрассветном тумане. Дон Хуан улыбается: «Теперь ты знаешь, кто питается тобой. Это только начало пути».</p>

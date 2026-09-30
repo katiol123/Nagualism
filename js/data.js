@@ -8,7 +8,7 @@ const HEROES = {
     hp: 72, gold: 99,
     body: 'assets/heroes/castaneda_body.png', portrait: 'assets/heroes/castaneda_portrait.jpg',
     desc: 'Антрополог, ставший учеником дона Хуана. Копит Осознание, а затем одним рывком сдвигает точку сборки. Летуны охотятся за его осознанием — не давайте им насытиться.',
-    deck: ['strike', 'strike', 'strike', 'strike', 'strike', 'defend', 'defend', 'defend', 'defend', 'notes'],
+    deck: ['strike', 'strike', 'strike', 'strike', 'intent', 'defend', 'defend', 'defend', 'defend', 'notes', 'flash'],
     relic: 'notebook',
     pool: ['stalk', 'notdoing', 'folly', 'gait', 'silence', 'hunt',
            'erase', 'mescalito', 'seeing', 'recap', 'ally', 'impecc',
@@ -74,6 +74,19 @@ const CARDS = {
     name: 'Полевые заметки', type: 'skill', rarity: 'basic', cost: 1, art: '📓',
     desc: u => `Взять ${u ? 3 : 2} карты. Получить 1 Осознание.`,
     play: (g, u) => { g.draw(u ? 3 : 2); g.aware(1); },
+  },
+  intent: {
+    name: 'Удар намерения', type: 'attack', rarity: 'basic', cost: 1, target: 'enemy', art: '🎯',
+    desc: (u, f) => `Нанести ${f.d(u ? 7 : 5)} урона. Если есть Осознание — потратить 1 и нанести ещё ${f.d(u ? 7 : 5)}.`,
+    play: (g, u, t) => {
+      g.hit(t, u ? 7 : 5);
+      if (g.getAware() > 0) { g.spendAware(1); g.hit(t, u ? 7 : 5); }
+    },
+  },
+  flash: {
+    name: 'Вспышка осознания', type: 'attack', rarity: 'basic', cost: 1, target: 'all', art: '💥',
+    desc: (u, f) => `Потратить всё Осознание. Нанести ВСЕМ врагам ${u ? 4 : 3} урона за каждое${f.tot(u ? 4 : 3)}.`,
+    play: (g, u) => { const n = g.getAware(); if (n > 0) { g.spendAware(); g.hitAll((u ? 4 : 3) * n); } },
   },
 
   // ---------- обычные ----------
