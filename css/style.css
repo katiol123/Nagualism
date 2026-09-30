@@ -25,7 +25,7 @@ button { font-family: inherit; }
   background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0, 0, 0, .55) 100%); }
 #app { position: absolute; inset: 0; }
 #fx { position: absolute; inset: 0; pointer-events: none; z-index: 60; }
-#overlay { position: absolute; inset: 0; z-index: 80; display: none; background: rgba(5, 2, 10, .8); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+#overlay { position: absolute; inset: 0; z-index: 80; display: none; background: rgba(5, 2, 10, .86); align-items: center; justify-content: center; }
 #overlay.open { display: flex; animation: ovfade .25s ease-out; }
 @keyframes ovfade { from { opacity: 0; } }
 #tooltip { position: fixed; z-index: 100; display: none; max-width: 290px; padding: 9px 12px; background: linear-gradient(#211631f5, #140c1ef5); border: 1px solid var(--gold-lo); border-radius: 8px; font-size: 14px; line-height: 1.38; pointer-events: none; box-shadow: 0 8px 26px #000c, inset 0 1px 0 #ffffff14; animation: tipin .15s ease-out; }
@@ -114,33 +114,32 @@ h1, h2, h3 { font-family: 'Cormorant SC', serif; margin: 0 0 10px; letter-spacin
 /* ============================================================
    Переходы между экранами
    ============================================================ */
-.scr-ghost { position: absolute; inset: 0; z-index: 50; pointer-events: none; }
-.scr-ghost-fade  { animation: gh-fade .6s ease-in forwards; }
-.scr-ghost-soft  { animation: gh-fade .4s ease-in forwards; }
-.scr-ghost-zoom  { animation: gh-zoom .6s cubic-bezier(.5, 0, .8, .4) forwards; }
-.scr-ghost-rise  { animation: gh-sink .7s cubic-bezier(.5, 0, .8, .4) forwards; }
-.scr-ghost-combat, .scr-ghost-boss { animation: gh-combat .75s cubic-bezier(.6, 0, .9, .4) forwards; }
-.scr-ghost-death { animation: gh-death 1.2s ease-in forwards; }
-.scr-ghost-dawn  { animation: gh-dawn 1.2s ease-in forwards; }
-@keyframes gh-fade { to { opacity: 0; filter: blur(4px); } }
-@keyframes gh-zoom { to { opacity: 0; transform: scale(1.25); filter: blur(10px) brightness(1.4); } }
-@keyframes gh-sink { to { opacity: 0; transform: translateY(40px) scale(.96); filter: blur(6px); } }
-@keyframes gh-combat { 40% { filter: brightness(1.6) saturate(.4); } to { opacity: 0; transform: scale(1.35) rotate(-2deg); filter: blur(14px) brightness(.2); } }
-@keyframes gh-death { 30% { filter: grayscale(1) brightness(.8); } to { opacity: 0; filter: grayscale(1) brightness(0) blur(6px); } }
-@keyframes gh-dawn { 40% { filter: brightness(2.5); } to { opacity: 0; filter: brightness(4) blur(8px); } }
+.scr-ghost { position: absolute; inset: 0; z-index: 50; pointer-events: none; will-change: opacity, transform; contain: strict; }
+/* в уходящем экране всё замирает — браузеру не нужно продолжать сотни анимаций */
+.scr-ghost *, .scr-ghost *::before, .scr-ghost *::after { animation-play-state: paused !important; transition: none !important; }
+.scr-ghost-fade  { animation: gh-fade .55s ease-in forwards; }
+.scr-ghost-soft  { animation: gh-fade .35s ease-in forwards; }
+.scr-ghost-zoom  { animation: gh-zoom .55s cubic-bezier(.5, 0, .8, .4) forwards; }
+.scr-ghost-rise  { animation: gh-fade .55s ease-in forwards; }
+.scr-ghost-combat, .scr-ghost-boss { animation: gh-combat .7s cubic-bezier(.6, 0, .9, .4) forwards; }
+.scr-ghost-death { animation: gh-fade 1.2s ease-in forwards; }
+.scr-ghost-dawn  { animation: gh-fade 1.2s ease-in forwards; }
+/* только прозрачность и transform — их считает видеокарта, без полноэкранного размытия */
+@keyframes gh-fade { to { opacity: 0; } }
+@keyframes gh-zoom { to { opacity: 0; transform: scale(1.12); } }
+@keyframes gh-combat { to { opacity: 0; transform: scale(1.2); } }
 
-.enter-fade   { animation: en-fade .7s ease-out; }
-.enter-soft   { animation: en-fade .45s ease-out; }
-.enter-zoom   { animation: en-zoom .75s cubic-bezier(.2, .7, .3, 1); }
-.enter-rise   { animation: en-rise .8s cubic-bezier(.2, .7, .3, 1); }
-.enter-combat, .enter-boss { animation: en-combat .9s cubic-bezier(.2, .7, .3, 1); }
-.enter-death  { animation: en-fade 1.6s ease-out; }
-.enter-dawn   { animation: en-dawn 1.8s ease-out; }
-@keyframes en-fade { from { opacity: 0; filter: blur(6px); } }
-@keyframes en-zoom { from { opacity: 0; transform: scale(.88); filter: blur(10px); } }
-@keyframes en-rise { from { opacity: 0; transform: translateY(-50px); filter: blur(8px); } }
-@keyframes en-combat { 0% { opacity: 0; transform: scale(1.18); filter: brightness(0) blur(8px); } 45% { opacity: 1; filter: brightness(.6) blur(2px); } }
-@keyframes en-dawn { from { opacity: 0; filter: brightness(4) blur(10px); } }
+#app { will-change: opacity, transform; }
+.enter-fade   { animation: en-fade .6s ease-out; }
+.enter-soft   { animation: en-fade .4s ease-out; }
+.enter-zoom   { animation: en-zoom .6s cubic-bezier(.2, .7, .3, 1); }
+.enter-rise   { animation: en-fade .6s ease-out; }
+.enter-combat, .enter-boss { animation: en-combat .8s cubic-bezier(.2, .7, .3, 1); }
+.enter-death  { animation: en-fade 1.4s ease-out; }
+.enter-dawn   { animation: en-fade 1.6s ease-out; }
+@keyframes en-fade { from { opacity: 0; } }
+@keyframes en-zoom { from { opacity: 0; transform: scale(.94); } }
+@keyframes en-combat { 0% { opacity: 0; transform: scale(1.1); } 45% { opacity: 1; } }
 
 /* разрез перед боем */
 .wipe { position: absolute; inset: 0; z-index: 70; pointer-events: none; }
@@ -194,7 +193,7 @@ h1, h2, h3 { font-family: 'Cormorant SC', serif; margin: 0 0 10px; letter-spacin
 .hero-card .soon { position: absolute; right: 8px; top: 8px; font-size: 11px; background: #5a2233; color: #ffd; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 1px; }
 .hero-info { position: absolute; left: 360px; right: 50px; top: 96px; bottom: 30px; display: flex; gap: 30px; align-items: flex-end; }
 .hero-full { height: 560px; filter: drop-shadow(0 10px 20px #000) drop-shadow(0 0 30px rgba(255, 200, 120, .15)); animation: hero-in .6s cubic-bezier(.2, .7, .3, 1); }
-@keyframes hero-in { from { opacity: 0; transform: translateX(-30px); filter: blur(6px); } }
+@keyframes hero-in { from { opacity: 0; transform: translateX(-30px); } }
 .hi-text { flex: 1; border-radius: 12px; padding: 24px 28px; margin-bottom: 40px; font-size: 17px; line-height: 1.5; animation: rise-in .6s .1s backwards; }
 .hi-text h3 { font-size: 36px; }
 .hi-text h3 small { font-size: 20px; color: var(--gold); -webkit-text-fill-color: var(--gold); }
@@ -283,7 +282,7 @@ h1, h2, h3 { font-family: 'Cormorant SC', serif; margin: 0 0 10px; letter-spacin
   background: radial-gradient(circle, #4a2c5c, #140b1c 70%); border: 2px solid var(--gold-lo); box-shadow: 0 0 0 6px #0c0714, 0 0 0 7px rgba(232, 194, 122, .3), 0 0 60px rgba(160, 100, 220, .35), inset 0 0 50px #000;
   animation: art-in .9s cubic-bezier(.2, .7, .3, 1) backwards; }
 .scene-art::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, transparent 55%, rgba(0, 0, 0, .6)); pointer-events: none; }
-@keyframes art-in { from { opacity: 0; transform: scale(.8) rotate(-8deg); filter: blur(8px); } }
+@keyframes art-in { from { opacity: 0; transform: scale(.85) rotate(-8deg); } }
 .scene-portrait { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
 .scene-text { flex: 1; font-size: 19px; line-height: 1.55; }
 .scene-text h2 { font-size: 44px; animation: rise-in .6s .15s backwards; }
@@ -310,7 +309,7 @@ h1, h2, h3 { font-family: 'Cormorant SC', serif; margin: 0 0 10px; letter-spacin
 .rewards .btn { margin-top: 10px; }
 
 /* ---------- карта уровня ---------- */
-.map-scroll { position: absolute; left: 280px; width: 760px; top: 0; bottom: 0; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth;
+.map-scroll { position: absolute; left: 280px; width: 760px; top: 0; bottom: 0; overflow-y: auto; overflow-x: hidden;
   background: radial-gradient(ellipse at 50% 50%, rgba(217, 196, 154, .1), transparent 70%), linear-gradient(90deg, transparent, rgba(217, 196, 154, .06) 12%, rgba(217, 196, 154, .08) 50%, rgba(217, 196, 154, .06) 88%, transparent);
   border-left: 1px solid rgba(232, 194, 122, .12); border-right: 1px solid rgba(232, 194, 122, .12); }
 .map-svg { display: block; margin: 0 auto; }
@@ -371,7 +370,7 @@ h1, h2, h3 { font-family: 'Cormorant SC', serif; margin: 0 0 10px; letter-spacin
 .enemies { position: absolute; right: 60px; bottom: 30px; display: flex; align-items: flex-end; gap: 26px; flex-direction: row-reverse; }
 .enemies .unit { position: relative; cursor: default; transition: opacity .8s, transform .8s, filter .8s; animation: enemy-in .9s cubic-bezier(.2, .7, .3, 1) backwards; }
 .enemies .unit:nth-child(2) { animation-delay: .12s; } .enemies .unit:nth-child(3) { animation-delay: .24s; } .enemies .unit:nth-child(4) { animation-delay: .36s; }
-@keyframes enemy-in { from { opacity: 0; transform: translateY(-60px) scale(.8); filter: blur(8px) brightness(0); } }
+@keyframes enemy-in { from { opacity: 0; transform: translateY(-60px) scale(.8); } }
 .enemies .unit.targetable { cursor: crosshair; }
 .enemies .unit.targetable .sprite { filter: drop-shadow(0 0 6px rgba(255, 150, 150, .5)); }
 .enemies .unit.targetable:hover .sprite { filter: drop-shadow(0 0 18px #ff5a5a) brightness(1.25); }
@@ -396,7 +395,9 @@ h1, h2, h3 { font-family: 'Cormorant SC', serif; margin: 0 0 10px; letter-spacin
 .blockbadge.pop { animation: pop .35s cubic-bezier(.2, .8, .3, 1.6); }
 @keyframes pop { from { transform: scale(1.8); } }
 .statuses { display: flex; gap: 4px; margin-top: 5px; min-height: 24px; flex-wrap: wrap; justify-content: center; max-width: 190px; }
-.st { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; background: linear-gradient(#2a1d37e6, #140c1ee6); border: 1px solid #6b5a80; border-radius: 10px; padding: 1px 7px; cursor: help; animation: pop .3s ease-out; }
+.st { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; background: linear-gradient(#2a1d37e6, #140c1ee6); border: 1px solid #6b5a80; border-radius: 10px; padding: 1px 7px; cursor: help; }
+.st.new { animation: st-in .45s cubic-bezier(.2, .8, .3, 1.5) backwards; }
+@keyframes st-in { from { transform: scale(2.2) translateY(-10px); opacity: 0; filter: brightness(2.5); } }
 .st.bad { border-color: #a04040; box-shadow: 0 0 6px rgba(200, 60, 60, .4); }
 .st b { font-size: 12px; }
 .intent { min-height: 30px; font-size: 18px; font-weight: 700; margin-bottom: 6px; padding: 3px 10px; border-radius: 12px; background: linear-gradient(#000c, #0009); border: 1px solid rgba(255, 255, 255, .12); cursor: help; animation: intentbob 1.8s ease-in-out infinite; }
@@ -443,7 +444,7 @@ h1, h2, h3 { font-family: 'Cormorant SC', serif; margin: 0 0 10px; letter-spacin
 .hurtflash { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(200, 0, 0, .5)); animation: flash .6s ease-out forwards; }
 @keyframes flash { to { opacity: 0; } }
 
-.float { position: absolute; transform: translateX(-50%); font-weight: 700; font-size: 30px; text-shadow: 0 2px 0 #000, 0 0 10px #000; white-space: nowrap; animation: floatup 1.3s ease-out forwards; z-index: 61; }
+.float { position: absolute; transform: translateX(-50%); font-weight: 700; font-size: 30px; text-shadow: 0 2px 0 #000, 0 0 10px #000; white-space: nowrap; animation: floatup calc(1.3s / var(--spd, 1)) ease-out both; z-index: 61; }
 .float.dmg { color: #ff5a5a; font-size: 42px; font-family: 'Cormorant SC', serif; animation-name: floatdmg; }
 .float.blk { color: #8fc8ff; }
 .float.buff { color: #ffd27a; font-size: 22px; }
@@ -518,3 +519,91 @@ h1, h2, h3 { font-family: 'Cormorant SC', serif; margin: 0 0 10px; letter-spacin
 .hero-row { display: flex; justify-content: center; gap: 20px; }
 .hero-row img { height: 200px; filter: drop-shadow(0 6px 10px #000); animation: rise-in .8s backwards; }
 .hero-row img:nth-child(2) { animation-delay: .15s; } .hero-row img:nth-child(3) { animation-delay: .3s; }
+
+/* ============================================================
+   Зелья
+   ============================================================ */
+.tb-potions { display: flex; gap: 6px; padding: 3px 8px; border-radius: 16px; background: #0006; border: 1px solid #ffffff12; }
+.potion-slot { width: 32px; height: 38px; border-radius: 8px; border: none; padding: 0; background: none; position: relative; display: inline-flex; align-items: center; justify-content: center; }
+.potion-slot.empty { border: 1px dashed #ffffff30; background: radial-gradient(#ffffff08, transparent); }
+.potion-slot.full { cursor: pointer; transition: transform .15s; }
+.potion-slot.full::before { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: radial-gradient(color-mix(in srgb, var(--pc) 45%, transparent), transparent 70%); animation: pglow 2.4s ease-in-out infinite; }
+.potion-slot.full:hover { transform: translateY(-2px) scale(1.12) rotate(-6deg); }
+.potion-slot.gained { animation: pgain .7s cubic-bezier(.2, .8, .3, 1.5); }
+@keyframes pgain { from { transform: scale(2.4) rotate(-30deg); filter: brightness(3); } }
+@keyframes pglow { 50% { opacity: .45; transform: scale(1.15); } }
+.potion-svg { width: 100%; height: 100%; display: block; overflow: visible; position: relative; }
+.potion-svg .liquid { animation: wave 2.2s ease-in-out infinite alternate; }
+@keyframes wave { from { transform: translateX(-6px); } to { transform: translateX(4px) translateY(-1px); } }
+.potion-svg .bub { animation: bub 2.4s ease-in infinite; opacity: 0; }
+.potion-svg .b2 { animation-delay: .8s; } .potion-svg .b3 { animation-delay: 1.6s; }
+@keyframes bub { 10% { opacity: .9; } 100% { transform: translateY(-16px); opacity: 0; } }
+.potion-pop { position: absolute; z-index: 85; width: 260px; padding: 14px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(34, 22, 48, .97), rgba(16, 10, 24, .97)); border: 1px solid var(--pc);
+  box-shadow: 0 0 0 1px #000, 0 0 26px color-mix(in srgb, var(--pc) 45%, transparent), 0 16px 40px #000c; animation: ovpop .25s cubic-bezier(.2, .8, .3, 1.2); }
+.potion-pop::before { content: ''; position: absolute; top: -7px; left: 114px; width: 12px; height: 12px; background: #221630; border-left: 1px solid var(--pc); border-top: 1px solid var(--pc); transform: rotate(45deg); }
+.pp-head { display: flex; gap: 12px; align-items: center; }
+.pp-flask { width: 48px; height: 60px; flex-shrink: 0; filter: drop-shadow(0 0 10px var(--pc)); animation: bob 2.4s ease-in-out infinite; }
+.pp-head b { font-family: 'Cormorant SC', serif; font-size: 19px; color: var(--gold-hi); }
+.pp-head p { margin: 4px 0 0; font-size: 14px; line-height: 1.35; }
+.pp-btns { display: flex; gap: 8px; margin-top: 12px; }
+.pp-btns .btn { flex: 1; padding: 7px 8px; font-size: 15px; }
+.pp-note { margin: 8px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+.potion-fly { position: absolute; width: 44px; height: 54px; z-index: 66; pointer-events: none; filter: drop-shadow(0 0 14px var(--pc)); }
+.rw-potion { display: inline-block; width: 26px; height: 32px; vertical-align: middle; filter: drop-shadow(0 0 6px var(--pc)); }
+.potion-ware .pw-flask { width: 52px; height: 64px; margin: 0 auto; filter: drop-shadow(0 0 12px var(--pc)); animation: bob 3s ease-in-out infinite; }
+
+/* ---------- места силы: Созерцание ---------- */
+.opt.special { border-color: #7fd8ff; background: linear-gradient(90deg, rgba(40, 60, 90, .9), rgba(20, 24, 44, .9)); }
+.opt.special b { color: #bfeaff; }
+.opt.locked { opacity: .5; cursor: help; border-style: dashed; animation: none; }
+.opt.locked:hover { transform: none; }
+
+/* ---------- кнопка скорости ---------- */
+.speed-btn { position: absolute; right: 60px; bottom: 166px; padding: 4px 12px; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer;
+  background: linear-gradient(#2e2140, #150d20); border: 1px solid var(--gold-lo); color: var(--gold-hi); box-shadow: 0 0 0 1px #000; }
+.speed-btn:hover { border-color: var(--gold); box-shadow: 0 0 12px rgba(232, 194, 122, .4); }
+
+/* ---------- перетаскивание карт ---------- */
+body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
+.card.in-hand.dragging { transition: none; z-index: 70 !important; box-shadow: 0 0 0 2px var(--gold), 0 20px 40px #000, 0 0 30px color-mix(in srgb, var(--tc) 60%, transparent); }
+.card.in-hand.dragging.will-play { box-shadow: 0 0 0 3px #9dff8a, 0 0 46px rgba(140, 255, 150, .8), 0 20px 40px #000; }
+.card.in-hand.aiming, .card.in-hand.aiming:hover { transform: translateX(calc(-50% + var(--x))) translateY(-70px) scale(1.18); z-index: 70 !important; box-shadow: 0 0 0 2px #ff9a7a, 0 0 36px rgba(255, 110, 80, .7); }
+#dragArrow { position: absolute; inset: 0; width: 1280px; height: 720px; pointer-events: none; opacity: 0; transition: opacity .12s; z-index: 64; overflow: visible; }
+#dragArrow.show { opacity: 1; }
+#dragArrow .da-glow { fill: none; stroke: rgba(255, 200, 120, .35); stroke-width: 16; stroke-linecap: round; filter: blur(5px); }
+#dragArrow .da-line { fill: none; stroke: url(#daG); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 14 10; animation: dashflow .5s linear infinite; }
+#dragArrow .da-head path { fill: #ffd27a; stroke: #3a1e00; stroke-width: 1.5; filter: drop-shadow(0 0 6px #ffb060); }
+#dragArrow.hot .da-glow { stroke: rgba(255, 80, 60, .5); }
+#dragArrow.hot .da-line { stroke: #ff6a5a; }
+#dragArrow.hot .da-head path { fill: #ff5a4a; filter: drop-shadow(0 0 10px #ff3030); }
+.enemies .unit.drag-target .sprite { filter: drop-shadow(0 0 22px #ff4a4a) brightness(1.3); }
+.enemies .unit.drag-target::after { content: ''; position: absolute; left: 50%; top: 40%; width: 80px; height: 80px; margin: -40px 0 0 -40px; border: 3px solid #ff6a6a; border-radius: 50%; box-shadow: 0 0 18px #ff4a4a, inset 0 0 12px #ff4a4a; animation: reticle .8s ease-in-out infinite; pointer-events: none; }
+
+/* ---------- вторая фаза босса ---------- */
+.unit.boss.phase2 .sprite { animation: phase2in 1.2s ease-out; filter: drop-shadow(0 0 40px rgba(255, 20, 20, .8)) saturate(1.4); }
+.unit.boss.phase2 .flyer-svg { transform: scale(1.08); }
+.unit.boss.phase2 .flyer-svg .wing { animation-duration: .45s; }
+@keyframes phase2in { 0% { filter: brightness(4) drop-shadow(0 0 60px #fff); transform: scale(1.2); } 100% { filter: drop-shadow(0 0 40px rgba(255, 20, 20, .8)); } }
+.enemies .unit.attack .sprite { animation-duration: calc(.5s / var(--spd, 1)); }
+.banner { animation-duration: calc(1.3s / var(--spd, 1)); }
+
+/* ---------- обновления на месте (без дёрганья экрана) ---------- */
+.scene-text.refresh { animation: soft-in .4s ease-out; }
+.scene-text.refresh h2, .scene-text.refresh > p, .scene-text.refresh .opt { animation: none; }
+.scene-text.refresh .opt { animation: soft-in .35s ease-out backwards; }
+.scene-text.refresh .opt:nth-child(2) { animation-delay: .05s; } .scene-text.refresh .opt:nth-child(3) { animation-delay: .1s; }
+@keyframes soft-in { from { opacity: 0; transform: translateY(6px); } }
+.scene-art.art-swap > * { animation: soft-in .45s ease-out; }
+.hero-info { transition: opacity .16s ease; }
+.hero-info.swapping { opacity: 0; }
+.hero-info.swapped .hero-full { animation: hero-swap .45s ease-out; }
+.hero-info.swapped .hi-text { animation: none; }
+@keyframes hero-swap { from { opacity: 0; transform: translateX(-12px); } }
+
+/* компактная верхняя панель: зелья и реликвии помещаются в одну строку */
+.topbar { gap: 12px; }
+.tb-hero b, .tb-floor { white-space: nowrap; }
+.tb-stat { white-space: nowrap; padding: 3px 10px; }
+.tb-relics { min-width: 0; overflow: hidden; flex-wrap: nowrap; }
+.tb-relics .relic { flex-shrink: 0; }

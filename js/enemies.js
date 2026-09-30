@@ -38,6 +38,7 @@ const ENEMIES = {
       bite: { name: 'Укус', dmg: 6 },
       drain: { name: 'Пожирание осознания', dmg: 3, drain: 1 },
     },
+    react: 'drain',
     ai: e => wpick(e, [['bite', 55], ['drain', 45]]),
   },
   leech: {
@@ -57,7 +58,12 @@ const ENEMIES = {
       gather: { name: 'Сгущение тьмы', block: 8, buff: { strength: 2 } },
       claws: { name: 'Когти', dmg: 5, times: 2 },
     },
-    ai: e => cycle(e, ['claws', 'gather', 'dive'], e.seed % 3),
+    ai: e => {
+      const last = e.hist[e.hist.length - 1];
+      if (!last || last === 'gather') return Math.random() < 0.5 ? 'claws' : 'dive';
+      if (Math.random() < 0.6) return 'gather';
+      return last === 'claws' ? 'dive' : 'claws';
+    },
   },
   flock: {
     name: 'Летун стаи', hp: [18, 22],
@@ -67,6 +73,7 @@ const ENEMIES = {
       shriek: { name: 'Визг', dmg: 3, debuff: { vulnerable: 1 } },
       drain: { name: 'Пожирание осознания', dmg: 4, drain: 1 },
     },
+    react: 'drain',
     ai: e => wpick(e, [['peck', 45], ['shriek', 25], ['drain', 30]]),
   },
   // ---------- элиты ----------
@@ -79,7 +86,13 @@ const ENEMIES = {
       sting: { name: 'Жало', dmg: 16 },
       cocoon: { name: 'Кокон сновидения', block: 14, buff: { strength: 2 }, addCards: { id: 'mind', n: 2, to: 'discard' } },
     },
-    ai: e => cycle(e, ['swarm', 'cocoon', 'sting']),
+    ai: e => {
+      const last = e.hist[e.hist.length - 1];
+      if (!last) return 'swarm';
+      if (last === 'cocoon') return Math.random() < 0.5 ? 'swarm' : 'sting';
+      if (last === 'sting') return 'cocoon';
+      return Math.random() < 0.55 ? 'cocoon' : 'sting';
+    },
   },
   ancient: {
     name: 'Древний летун', hp: [94, 98], elite: true,
@@ -90,22 +103,41 @@ const ENEMIES = {
       devour: { name: 'Великое пожирание', dmg: 10, drain: 99 },
       brood: { name: 'Высиживание', block: 12, buff: { strength: 2 } },
     },
-    ai: e => e.turn === 0 ? 'shroud' : cycle(e, ['wing', 'devour', 'brood'], 0, 1),
+    react: 'devour',
+    ai: e => {
+      const last = e.hist[e.hist.length - 1];
+      if (!last) return 'shroud';
+      if (last === 'shroud' || last === 'brood') return Math.random() < 0.5 ? 'wing' : 'devour';
+      if (last === 'wing') return Math.random() < 0.5 ? 'devour' : 'brood';
+      return 'brood';
+    },
   },
   // ---------- босс ----------
   boss: {
-    name: 'Хозяин летунов', hp: [210, 210], boss: true,
+    name: 'Хозяин летунов', hp: [170, 170], boss: true, phase2At: 0.5,
     art: { w: 330, body: '#07050d', body2: '#2c1846', wing: '#020104', eye: '#ff2a2a', eyeR: 8, horns: true, tendrils: true,
            eyes: [[84, 64], [116, 64], [100, 80], [72, 84], [128, 84], [100, 52]], cls: 'boss-svg' },
     moves: {
-      descend: { name: 'Нисхождение', block: 15, summon: ['scav', 'scav'] },
-      devour: { name: 'Пожирание осознания', dmg: 15, drain: 99 },
-      impose: { name: 'Навязывание разума', debuff: { weak: 2 }, addCards: { id: 'mind', n: 3, to: 'draw' } },
-      swarm: { name: 'Чёрный рой', dmg: 5, times: 4 },
-      cocoon: { name: 'Тёмный кокон', block: 20, buff: { strength: 3 } },
+      // фаза 1: кормится стаей и осознанием
+      descend: { name: 'Нисхождение', block: 12, summon: ['scav', 'scav'] },
+      devour: { name: 'Пожирание осознания', dmg: 11, drain: 3, drainStr: 2 },
+      impose: { name: 'Навязывание разума', debuff: { weak: 2 }, addCards: { id: 'mind', n: 2, to: 'draw' } },
+      swarm: { name: 'Чёрный рой', dmg: 4, times: 3 },
+      cocoon: { name: 'Тёмный кокон', block: 15, buff: { strength: 2 } },
       call: { name: 'Зов стаи', block: 10, summon: ['scav', 'scav'] },
+      // фаза 2: истинный облик — без стаи, но с тяжёлыми ударами по расписанию
+      rebirth: { name: 'Истинный облик', block: 20, cleanse: true, summon: ['flock'] },
+      rend: { name: 'Разрыв тени', dmg: 6, times: 2 },
+      feast: { name: 'Великое пиршество', dmg: 12, drain: 99, drainStr: 2 },
+      gaze: { name: 'Взгляд бездны', block: 12, debuff: { weak: 1 } },
+      eclipse: { name: 'Затмение', dmg: 22 },
     },
+    react: e => e.phase2 ? 'feast' : 'devour',
     ai: (e, cb) => {
+      if (e.phase2) {
+        const list = ['rend', 'feast', 'gaze', 'eclipse'];
+        return list[(e.p2turn++) % list.length];
+      }
       if (e.turn === 0) return 'descend';
       const minions = cb.enemies.filter(x => !x.dead && x !== e).length;
       if (e.turn % 5 === 0 && minions === 0) return 'call';
@@ -189,6 +221,41 @@ const EVENTS = [
         go: done => { api.damage(6); api.chooseCard('uncommon', name => done(name ? `На рассвете ты нашёл своё место: «${name}».` : 'На рассвете ты просто уснул.')); } },
       { label: 'Уснуть на «месте врага»', sub: 'Потерять 5 максимального здоровья. Получить 75 песо.',
         go: done => { api.run.maxHp -= 5; api.run.hp = Math.min(api.run.hp, api.run.maxHp); api.run.gold += 75; done('Ты проснулся разбитым. Дон Хуан смеётся и суёт тебе в карман монеты.'); } },
+    ],
+  },
+  {
+    id: 'curandera', title: 'Курандера', art: '🌿', paid: true,
+    text: 'У дороги сидит старая знахарка. Над её жаровней вьётся горький дым копала. «Лечу тело и чищу путь, — говорит она. — Но даром ничего не бывает».',
+    options: api => [
+      { label: 'Лечение травами', sub: 'Заплатить 45 песо. Восстановить 25 здоровья.', can: () => api.run.gold >= 45,
+        go: done => { api.pay(45); api.heal(25); done('Отвар горький, но по телу разливается тепло.'); } },
+      { label: 'Очищение пути', sub: 'Заплатить 80 песо. Удалить карту из колоды.', can: () => api.run.gold >= 80 && api.run.deck.length > 1,
+        go: done => api.removeCard(n => { if (n) api.pay(80); done(n ? `Знахарка сжигает «${n}» в дыму копала.` : 'Ты передумал, и знахарка лишь усмехнулась.'); }) },
+      { label: 'Уйти', sub: 'Ничего не происходит.', go: done => done('Ты вежливо кланяешься и идёшь дальше.') },
+    ],
+  },
+  {
+    id: 'market', title: 'Ночной рынок в Оахаке', art: '🏮', paid: true,
+    text: 'Между рядами с перцем и глиняной посудой торгуют странными вещами. Продавец в тёмных очках шепчет: «У меня есть то, чего нет у других. Но цена — настоящая».',
+    options: api => [
+      { label: 'Талисман из-под прилавка', sub: 'Заплатить 110 песо. Получить случайную реликвию.', can: () => api.run.gold >= 110,
+        go: done => { api.pay(110); const r = api.randomRelic(); done(r ? `Продавец заворачивает в газету ${RELICS[r].icon} «${RELICS[r].name}».` : 'Продавец разводит руками и возвращает часть денег.'); } },
+      { label: 'Свиток учения', sub: 'Заплатить 65 песо. Выбрать одну из 3 необычных карт.', can: () => api.run.gold >= 65,
+        go: done => api.chooseCard('uncommon', n => { if (n) api.pay(65); done(n ? `Ты разбираешь записи: «${n}».` : 'Ничего не приглянулось.'); }) },
+      { label: 'Флакон без этикетки', sub: 'Заплатить 40 песо. Получить случайное зелье.', can: () => api.run.gold >= 40 && api.hasPotionSlot(),
+        go: done => { api.pay(40); const p = api.randomPotion(); done(`Во флаконе плещется ${POTIONS[p].name.toLowerCase()}.`); } },
+      { label: 'Пройти мимо', sub: 'Сохранить деньги.', go: done => done('Ты уходишь, чувствуя на спине чей-то взгляд.') },
+    ],
+  },
+  {
+    id: 'cave', title: 'Пещера сновидящих', art: '🕯️',
+    text: 'В скале — узкий вход. Внутри горят свечи и лежит старая циновка. Здесь, говорят, сновидящие учились не терять себя во сне. Но ночь в пещере вытягивает силы.',
+    options: api => [
+      { label: 'Остаться на ночь', sub: 'Потерять 8 здоровья. Научиться Созерцанию на местах силы.',
+        go: done => { api.damage(8); api.unlockContemplation(); done('Во сне ты видишь свои руки и не теряешь их. Теперь у каждого костра ты можешь созерцать: отрешиться от лишнего или накопить осознание.'); } },
+      { label: 'Заплатить проводнику', sub: 'Заплатить 35 песо. Улучшить 2 случайные карты.', can: () => api.run.gold >= 35,
+        go: done => { api.pay(35); const c = api.upgradeRandom(2); done(c.length ? `Проводник показывает тайные знаки на стенах. Улучшено: ${c.join(', ')}.` : 'Проводник рассказывает то, что ты уже знаешь.'); } },
+      { label: 'Уйти до темноты', sub: 'Ничего не происходит.', go: done => done('Ты уходишь, не оглядываясь на огоньки свечей.') },
     ],
   },
   {
