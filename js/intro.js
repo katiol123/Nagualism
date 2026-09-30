@@ -105,14 +105,24 @@ const Music = {
     if (!a) return;
     this.fade(a, 0, ms, () => a.pause());
   },
+  // Плейлист: треки чередуются по кругу, первым идёт «Linen Sirens»
+  tracks: ['assets/audio/linen_sirens.mp3', 'assets/audio/granite_lantern.mp3'],
+  track: 0,
   startTheme() {
     if (!this.theme) {
-      this.theme = new Audio('assets/audio/theme.mp3');
-      this.theme.loop = true;
+      this.theme = new Audio(this.tracks[this.track]);
       this.theme.volume = 0;
+      this.theme.addEventListener('ended', () => this.nextTrack());
     }
     if (musicMuted || !this.theme.paused) return;
     this.theme.play().then(() => this.fade(this.theme, 0.45, 2500)).catch(() => {});
+  },
+  nextTrack() {
+    this.track = (this.track + 1) % this.tracks.length;
+    this.theme.src = this.tracks[this.track];
+    this.theme.volume = 0;
+    if (musicMuted) return;
+    this.theme.play().then(() => this.fade(this.theme, 0.45, 1500)).catch(() => {});
   },
   toggle() {
     musicMuted = !musicMuted;
