@@ -20,6 +20,7 @@ JOBS = {
     'castaneda': ('young_carlos_castaneda_model_sheet.jpg', (760, 665, 1160, 1225), (80, 110, 610, 608)),
     'donjuan': ('don_juan_model_sheet_1-edited.jpg', (800, 640, 1120, 1225), (30, 20, 630, 580)),
     'genaro': ('don_genaro_model_sheet.jpg', (820, 655, 1100, 1215), (80, 85, 650, 598)),
+    'castaneda_walk': ('young_carlos_castaneda_model_sheet.jpg', (1420, 665, 1740, 1228), None),  # для заставки
 }
 
 _net = None
@@ -118,16 +119,22 @@ def downscale(img, factor):
     return img.convert('RGBa').resize((round(w / factor), round(h / factor)), Image.LANCZOS).convert('RGBA')
 
 
-def main():
+def main(only=None):
     os.makedirs(OUT, exist_ok=True)
     for name, (sheet, body, face) in JOBS.items():
+        if only and name not in only:
+            continue
         im = Image.open(os.path.join(ROOT, sheet))
         sprite = downscale(cutout(upscale4(im.crop(body)), 4), 2)   # итог — ×2 от исходника
-        sprite.save(os.path.join(OUT, name + '_body.png'), optimize=True)
+        sprite.save(os.path.join(OUT, name + ('.png' if face is None else '_body.png')), optimize=True)
+        if face is None:
+            print(name, sprite.size)
+            continue
         portrait = downscale(upscale4(im.crop(face)), 2).convert('RGB')
         portrait.save(os.path.join(OUT, name + '_portrait.jpg'), quality=90)
         print(name, sprite.size, portrait.size)
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    main(sys.argv[1:] or None)   # можно указать имена: python3 tools/cut_sprites.py castaneda_walk

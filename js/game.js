@@ -125,7 +125,8 @@ document.addEventListener('mousedown', () => { tooltip.style.display = 'none'; }
 let actions = {};
 const globalActions = {
   deck: () => showDeckView(run.deck, 'Колода'),
-  sound: () => { muted = !muted; localStorage.setItem('nagual_mute', muted ? '1' : '0'); refreshTop(); },
+  sound: el => { muted = !muted; localStorage.setItem('nagual_mute', muted ? '1' : '0'); el.classList.toggle('off', muted); refreshTop(); },
+  music: el => { Music.toggle(); el.classList.toggle('off', musicMuted); refreshTop(); },
   menu: () => showMenu(),
   closeOverlay: () => closeOverlay(),
 };
@@ -207,7 +208,8 @@ function topBar() {
     <div class="tb-relics">${run.relics.map(r => relicHTML(r)).join('')}</div>
     <div class="tb-floor">Акт I · Пустыня летунов · Этаж ${run.floor}</div>
     <button class="tb-btn" data-act="deck" data-tip="Посмотреть колоду">🂠 <b>${run.deck.length}</b></button>
-    <button class="tb-btn" data-act="sound" data-tip="Звук">${muted ? '🔇' : '🔊'}</button>
+    <button class="tb-btn ${musicMuted ? 'off' : ''}" data-act="music" data-tip="Музыка">🎵</button>
+    <button class="tb-btn ${muted ? 'off' : ''}" data-act="sound" data-tip="Звуки">🔊</button>
     <button class="tb-btn" data-act="menu" data-tip="Меню">☰</button>
   </div>`;
 }
@@ -316,28 +318,34 @@ function sigilSVG() {
 // ============================================================
 //  Экран: титул
 // ============================================================
-function showTitle() {
+function showTitle(fromIntro = false) {
   const saved = loadSave();
   actions = {
     newRun: () => showSelect(),
     cont: () => { run = saved; showMap(); },
     help: () => showHelp(),
   };
-  beginSwap('fade');
+  if (!fromIntro) beginSwap('fade');
+  else { app.className = ''; }
   app.innerHTML = `<div class="screen title-screen">
-    <div class="sky"></div><div class="stars"></div><div class="moon"></div>
-    <div class="sigil">${sigilSVG()}</div>${motes(22)}
-    <div class="title-flyers">${[0, 1, 2, 3].map(i => `<div class="tf tf${i}">${flyerSVG({ w: 120 - i * 18, body: '#05030a', body2: '#1a1026', wing: '#000', eye: '#ffd24d' })}</div>`).join('')}</div>
-    <div class="mountains"></div>
-    <div class="title-box">
+    ${desertHTML('title-desert')}
+    <div class="title-flyers">${[0, 1, 2].map(i => `<div class="tf tf${i}">${flyerSVG({ w: 90 - i * 18, body: '#05030a', body2: '#1a1026', wing: '#000', eye: '#ffd24d' })}</div>`).join('')}</div>
+    ${motes(16)}
+    <div class="t-hero"><div class="i-aura"></div><img src="${HEROES.castaneda.body}" alt=""></div>
+    <div class="t-title">
+      <div class="i-sigil">${sigilSVG()}</div>
       <h1>Путь Нагваля</h1>
       <p class="subtitle">карточный рогалик о пути воина</p>
-      <div class="col">
+      <div class="col t-menu">
         ${saved ? `<button class="btn big" data-act="cont">Продолжить путь <small>${HEROES[saved.hero].name}, этаж ${saved.floor}</small></button>` : ''}
         <button class="btn big ${saved ? 'ghost' : ''}" data-act="newRun">Новый путь</button>
         <button class="btn ghost" data-act="help">Как играть</button>
       </div>
-      <p class="quote">«Воин принимает свою судьбу, какой бы она ни была, и принимает её с абсолютным смирением.»</p>
+    </div>
+    <p class="quote">«Воин принимает свою судьбу, какой бы она ни была, и принимает её с абсолютным смирением.»</p>
+    <div class="t-audio">
+      <button class="tb-btn ${musicMuted ? 'off' : ''}" data-act="music" data-tip="Музыка">🎵</button>
+      <button class="tb-btn ${muted ? 'off' : ''}" data-act="sound" data-tip="Звуки">🔊</button>
     </div>
   </div>`;
 }
@@ -1411,6 +1419,6 @@ function showVictory() {
 }
 
 // ============================================================
-//  Старт
+//  Старт: «нажмите, чтобы начать» → заставка → титул (музыка по кругу)
 // ============================================================
-showTitle();
+showGate();
