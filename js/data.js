@@ -109,7 +109,7 @@ const CARDS = {
 
   // ---------- обычные ----------
   stalk: {
-    name: 'Сталкинг', type: 'attack', rarity: 'common', cost: 1, target: 'enemy', art: '🐾',
+    name: 'Охота на добычу', type: 'attack', rarity: 'common', cost: 1, target: 'enemy', art: '🐾',
     desc: (u, f) => `Нанести ${f.d(u ? 9 : 7)} урона. Наложить ${u ? 2 : 1} Уязвимость.`,
     play: (g, u, t) => { g.hit(t, u ? 9 : 7); g.debuff(t, 'vulnerable', u ? 2 : 1); },
   },
