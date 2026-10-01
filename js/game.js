@@ -929,7 +929,7 @@ function genMap() {
     const kids = n.next.map(nk => nodes[nk] && nodes[nk].r === 6 ? 'shop' : null);
     let t = 'monster';
     for (let tries = 0; tries < 12; tries++) {
-      const w = [['monster', 45], ['event', 22], ['elite', n.r >= 5 ? 16 : 0], ['rest', n.r >= 5 && n.r !== ROWS - 2 ? 12 : 0], ['shop', n.r >= 2 ? 6 : 0]];
+      const w = [['monster', 36], ['event', 25], ['elite', n.r >= 5 ? 14 : 0], ['rest', n.r >= 4 && n.r !== ROWS - 2 ? 19 : 0], ['shop', n.r >= 2 ? 6 : 0]];
       const tot = w.reduce((s, x) => s + x[1], 0);
       let x = Math.random() * tot;
       for (const [tt, ww] of w) { x -= ww; if (x < 0) { t = tt; break; } }
@@ -1265,7 +1265,7 @@ function playerDmg(base, target) {
   return Math.max(0, d);
 }
 function enemyDmg(e, base) {
-  let d = base + (e.st.strength || 0);
+  let d = base + (e.st.strength || 0) + (e.st.empower || 0);
   if (e.st.weak) d = Math.floor(d * 0.75);
   if (cb.p.st.vulnerable) d = Math.floor(d * 1.5);
   return Math.max(0, d);
@@ -1417,6 +1417,7 @@ function thornsBack(e) {
 function damageEnemy(e, d) {
   if (e.dead) return false;
   if (e.st.intangible) d = Math.floor(d / 2);
+  if (e.st.ward) d = Math.floor(d * 0.7);
   if (e.clinging) {          // облако срывается, если за ход нанести ему 18+ урона
     e.turnDmg = (e.turnDmg || 0) + d;
     if (e.turnDmg >= 18 && d > 0) setTimeout(() => detachCloud(e), 0);
@@ -1433,6 +1434,7 @@ function damageEnemy(e, d) {
     fx(e.uid, '', '', null, 'burst:#b36bff');
     if (e.def.boss) cb.enemies.forEach(m => { if (!m.dead) { m.dead = true; m.hp = 0; fx(m.uid, 'бежит!', 'info', null, 'burst:#b36bff'); } });
     else run.relics.forEach(r => RELICS[r].onKill && RELICS[r].onKill(G, e));
+    summonerCheck();
     return true;
   }
   // вторая фаза босса
@@ -1458,6 +1460,14 @@ function damagePlayer(d) {
   sfx(rest > 0 ? 'hurt' : 'block');
   if (rest > 0 && p.st.tyrant && (cb.tyrantN || 0) < 2 && run.hp > 0) { cb.tyrantN = (cb.tyrantN || 0) + 1; G.aware(p.st.tyrant); fx('hero', '👺 Мелкий тиран учит', 'buff'); }
   if (hasRelic('hat') && !cb.hatUsed && run.hp > 0 && run.hp < run.maxHp / 2) { cb.hatUsed = true; G.block(12); fx('hero', '👒 Шляпа Хенаро', 'buff'); }
+}
+// Заклинатель, оставшись один, сразу меняет намерение на призыв
+function summonerCheck() {
+  for (const s of alive()) {
+    if (!s.def.summoner || s.move === 'summon' || alive().some(x => x !== s)) continue;
+    s.move = 'summon'; s.hist[s.hist.length - 1] = 'summon';
+    fx(s.uid, 'зовёт тень!', 'drain', 'pulse');
+  }
 }
 // Если героя переполняет Осознание, один из летунов меняет намерение и идёт его пожирать
 function checkReaction() {
@@ -1652,7 +1662,7 @@ function startTurn() {
   run.relics.forEach(r => RELICS[r].turnStart && RELICS[r].turnStart(G, cb.turn));
   cb.busy = false;
   sfx('turn');
-  banner(cb.turn === 1 ? (cb.kind === 'boss' ? 'Хозяин летунов' : cb.enemies.some(e => e.def.miniboss) ? 'Тёмное облако' : cb.enemies.some(e => e.def.unique) ? 'Особый противник' : cb.kind === 'elite' ? 'Элитный летун' : cb.enemies.some(e => e.def.rare) ? 'Редкий летун' : 'Бой') : 'Ваш ход', cb.turn === 1 && cb.kind !== 'monster' ? 'danger' : '');
+  banner(cb.turn === 1 ? (cb.kind === 'boss' ? 'Хозяин летунов' : cb.enemies.some(e => e.def.miniboss) ? cb.enemies.find(e => e.def.miniboss).def.name : cb.enemies.some(e => e.def.unique) ? 'Особый противник' : cb.kind === 'elite' ? 'Элитный летун' : cb.enemies.some(e => e.def.rare) ? 'Редкий летун' : 'Бой') : 'Ваш ход', cb.turn === 1 && cb.kind !== 'monster' ? 'danger' : '');
   updateCombat();
 }
 
@@ -1742,6 +1752,8 @@ async function endTurn() {
 
   // ход врагов
   const frozen = cb.stopWorld; cb.stopWorld = false;
+  // Покров тьмы держится один ход: спадает, когда летуны снова начинают действовать
+  if (!frozen) for (const e of cb.enemies) delete e.st.ward;
   if (frozen) { sound('psy_long'); banner('Мир остановлен', 'win'); await sleep(900); }
   else for (const e of alive()) e.block = 0;
   updateCombat();
@@ -1753,6 +1765,7 @@ async function endTurn() {
   }
   // тики дебаффов
   for (const e of cb.enemies) for (const k of ['weak', 'vulnerable']) if (e.st[k]) addSt(e.st, k, -1);
+  for (const e of cb.enemies) delete e.st.empower;   // усиление атаки — только на этот ход летунов
   for (const k of ['weak', 'vulnerable']) if (p.st[k] && !cb.justApplied.has(k)) addSt(p.st, k, -1);
   cb.justApplied.clear();
   if (!frozen) cb.enemies.forEach(chooseIntent);
@@ -1765,6 +1778,7 @@ async function doEnemyMove(e) {
   const p = cb.p;
   delete e.st.intangible;
   if (e.def.art && e.def.art.cloud && !e.clinging && e.move !== 'reform' && p.block === 0) { e.move = 'cling'; e.hist[e.hist.length - 1] = 'cling'; }
+  if (e.def.summoner && !alive().some(x => x !== e)) { e.move = 'summon'; e.hist[e.hist.length - 1] = 'summon'; }
   const m = e.def.moves[e.move];
   const hp0 = run.hp;
   fx(e.uid, m.name, 'movename', m.dmg ? 'attack' : 'pulse');
@@ -1780,6 +1794,18 @@ async function doEnemyMove(e) {
       if (run.hp <= 0) return;
       if ((m.times || 1) > 1) await sleep(200);
     }
+  }
+  if (m.groupBuff) {
+    sound('mystic');
+    for (const a of alive()) {
+      for (const [k, v] of Object.entries(m.groupBuff)) a.st[k] = Math.max(a.st[k] || 0, v);
+      fx(a.uid, '🌫️ Покров тьмы', 'buff', 'pulse', 'ring:#9dff6a');
+    }
+    sfx('buff');
+  }
+  if (m.mendAlly) {
+    const t = alive().filter(x => x !== e).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+    if (t) { const n = Math.min(m.mendAlly, t.maxHp - t.hp); t.hp += n; fx(t.uid, `+${n} ❤`, 'heal', 'pulse', 'ring:#7aff8a'); sfx('buff'); }
   }
   if (m.heal) { e.hp = Math.min(e.maxHp, e.hp + m.heal); fx(e.uid, `+${m.heal} ❤`, 'heal'); }
   if (m.sap) { addSt(p.st, 'sapped', m.sap); fx('hero', '🩸 Истощение', 'debuff'); }
@@ -1860,7 +1886,9 @@ function intentInfo(e) {
   if (e.def.thorns) tip.push(`Шипы: каждая ваша атака по нему — ${e.def.thorns} урона вам.`);
   if (m.heal) tip.push(`Восстановит ${m.heal} здоровья.`);
   if (m.addCards) { icons.push('🌑'); tip.push(`Подкинет в колоду ${m.addCards.n} × «${CARDS[m.addCards.id].name}».`); }
-  if (m.summon) { icons.push('🦇'); tip.push('Призовёт летунов.'); }
+  if (m.summon) { icons.push('🦇'); tip.push(e.def.summoner ? 'Остался один — призовёт Тенистого летуна.' : 'Призовёт летунов.'); }
+  if (m.groupBuff) { icons.push('⬆️🌫️'); tip.push(`Себе и союзникам: атаки +${m.groupBuff.empower} в этот же ход и −30% получаемого урона до конца вашего следующего хода.`); }
+  if (m.mendAlly) { icons.push('💚'); tip.push(`Подлечит самого раненого союзника на ${m.mendAlly}.`); }
   return { html: icons.join(' '), tip: tip.join('<br>') };
 }
 
@@ -2322,6 +2350,7 @@ function winCombat() {
   run.relics.forEach(r => RELICS[r].combatEnd && RELICS[r].combatEnd(run));
   run.fights++;
   const kind = cb.kind, bonus = cb.bonusGold || 0, turns = cb.turn;
+  const trophy = cb.enemies.map(e => e.def.reward).find(r => r && !hasRelic(r));
   const glowGain = (cb.p.st.aware || 0) * (hasRelic('shard') ? 2 : 1), glowBefore = run.glow || 0;
   run.glow = glowBefore + glowGain;
   if (kind === 'elite') run.stats.elites++;
@@ -2335,7 +2364,8 @@ function winCombat() {
   const base = (elite ? rnd(15, 20) : rnd(6, 10)) + bonus;
   const fast = elite ? (turns <= 4 ? 20 : turns <= 6 ? 10 : 0) : (turns <= 3 ? 12 : turns <= 5 ? 6 : 0);
   rewards.push({ type: 'gold', n: base + fast, base, fast, turns });
-  if (kind === 'elite') { const r = randomRelicId(); rewards.push(r ? { type: 'relic', id: r } : { type: 'gold', n: 60 }); }
+  if (kind === 'elite' && trophy) rewards.push({ type: 'relic', id: trophy });
+  else if (kind === 'elite') { const r = randomRelicId(); rewards.push(r ? { type: 'relic', id: r } : { type: 'gold', n: 60 }); }
   // шанс зелья как в Slay the Spire: 40%, после неудачи +10%, после выпадения −10%
   if (Math.random() * 100 < run.potionChance) { rewards.push({ type: 'potion', id: randomPotionId() }); run.potionChance -= 10; }
   else run.potionChance += 10;

@@ -319,6 +319,22 @@ const ENEMIES = {
     },
   },
 
+  // мини-босс-призыватель: один — всегда зовёт тенистого летуна; со свитой — усиливает её или лечит
+  summoner: {
+    name: 'Заклинатель теней', hp: [70, 74], elite: true, miniboss: true, summoner: true, reward: 'rattle',
+    art: { w: 225, body: '#140b22', body2: '#463066', wing: '#07040e', eye: '#9dff6a', eyeR: 6, body3: 'hood', wings: 'tatter', mouth: 'maw', extras: ['hoodtop', 'tendrils'], accent: '#5fd18a' },
+    moves: {
+      summon: { name: 'Призыв тени', block: 8, summon: ['shade'] },
+      empower: { name: 'Покров тьмы', groupBuff: { empower: 3, ward: 1 } },
+      mend: { name: 'Подпитка тенью', mendAlly: 12 },
+    },
+    ai: (e, cb) => {
+      const allies = cb.enemies.filter(x => !x.dead && x !== e);
+      if (!allies.length) return 'summon';
+      return Math.random() < 0.5 && allies.some(a => a.hp < a.maxHp) ? 'mend' : 'empower';
+    },
+  },
+
   // ---------- элиты ----------
   gnat: {
     name: 'Страж сновидения', hp: [80, 84], elite: true,
@@ -406,7 +422,7 @@ function cycle(e, list, offset = 0, skip = 0) {
 const ENCOUNTERS = {
   easy: [['scav', 'scav'], ['leech'], ['scav', 'flock']],
   hard: [['shade'], ['scav', 'leech'], ['scav', 'scav', 'scav'], ['shade', 'scav'], ['leech', 'leech'], ['flock', 'flock']],
-  elite: [['gnat'], ['ancient'], ['flock', 'flock', 'flock'], ['cloud']],
+  elite: [['gnat'], ['ancient'], ['flock', 'flock', 'flock'], ['cloud'], ['summoner', 'shade']],
   rare: [['whisper', 'scav'], ['tremor', 'scav'], ['thorn'], ['mother'], ['phantom', 'scav']],
   boss: [['boss']],
 };
