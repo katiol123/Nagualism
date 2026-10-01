@@ -259,31 +259,123 @@ function loadSave() {
 function clearSave() { localStorage.removeItem(SAVE_KEY); }
 
 // ============================================================
+//  Путь знания — прогресс между забегами (как открытия в Slay the Spire).
+//  После каждого забега копится Знание; шкала заполняется → открывается новая карта,
+//  шкала обнуляется (излишек переносится), а следующая становится длиннее.
+// ============================================================
+const META_KEY = 'nagual_meta';
+const UNLOCK_ORDER = ['inaccess', 'passes', 'tyrant', 'spot', 'rift'];
+const knowNeed = lvl => 50 + 30 * lvl;            // 50, 80, 110, 140, 170, …
+let meta = (() => { try { return { know: 0, level: 0, ...JSON.parse(localStorage.getItem(META_KEY) || '{}') }; } catch (e) { return { know: 0, level: 0 }; } })();
+function saveMeta() { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* приватный режим */ } }
+const cardUnlocked = id => !CARDS[id].locked || UNLOCK_ORDER.indexOf(id) < meta.level;
+function knowledgeParts(win) {
+  const parts = [
+    ['Пройдено этажей', run.floor, 2],
+    ['Выиграно боёв', run.fights, 3],
+    ['Повержено элит', run.stats.elites, 8],
+    ['Свечение кокона', Math.floor((run.glow || 0) / 2), 1],
+  ];
+  if (win) parts.push(['Хозяин летунов повержен', 1, 30]);
+  return parts.filter(p => p[1] > 0).map(([name, n, k]) => ({ name, n, pts: n * k }));
+}
+// начисляет Знание за забег; возвращает данные для анимации шкалы
+function awardKnowledge(win) {
+  if (run.metaDone) return run.metaDone;
+  const parts = knowledgeParts(win), total = parts.reduce((s, p) => s + p.pts, 0);
+  const from = { know: meta.know, level: meta.level };
+  const unlocked = [];
+  meta.know += total;
+  while (meta.know >= knowNeed(meta.level)) {
+    meta.know -= knowNeed(meta.level);
+    meta.level++;
+    if (UNLOCK_ORDER[meta.level - 1]) unlocked.push(UNLOCK_ORDER[meta.level - 1]);
+  }
+  saveMeta();
+  run.metaDone = { parts, total, from, to: { know: meta.know, level: meta.level }, unlocked };
+  return run.metaDone;
+}
+const nextUnlockText = lvl => UNLOCK_ORDER[lvl] ? 'новая карта' : 'пока все тайны открыты';
+function knowledgeHTML(res) {
+  const f = res.from;
+  return `<div class="know-box">
+    <div class="kb-head">📜 Путь знания <span class="kb-lvl">ступень <b>${f.level + 1}</b></span> <span class="kb-gain">+${res.total} Знания</span></div>
+    <div class="kb-parts">${res.parts.map(p => `<span>${p.name}${p.n > 1 ? ` ×${p.n}` : ''}: <b>+${p.pts}</b></span>`).join('')}</div>
+    <div class="k-bar"><i style="width:${f.know / knowNeed(f.level) * 100}%"></i></div>
+    <div class="kb-foot"><span class="kb-num">${f.know} / ${knowNeed(f.level)}</span><span class="kb-next">дальше: ${nextUnlockText(f.level)}</span></div>
+  </div>`;
+}
+// пошаговая анимация: заполнить → открыть карту → обнулить → заполнить дальше
+async function animateKnowledge(res) {
+  const box = document.querySelector('.know-box'); if (!box) return;
+  const bar = box.querySelector('.k-bar i'), num = box.querySelector('.kb-num'), lvl = box.querySelector('.kb-lvl b'), nxt = box.querySelector('.kb-next');
+  let { know, level } = res.from, left = res.total;
+  await sleep(900);
+  while (left > 0 && document.body.contains(box)) {
+    const need = knowNeed(level), step = Math.min(left, need - know);
+    know += step; left -= step;
+    bar.style.transition = `width ${Math.max(.4, step / need * 1.4)}s cubic-bezier(.3,.7,.3,1)`;
+    bar.style.width = `${know / need * 100}%`;
+    num.textContent = `${know} / ${need}`;
+    sfx('aware');
+    await sleep(Math.max(400, step / need * 1400) + 150);
+    if (know >= need) {
+      const id = UNLOCK_ORDER[level];
+      level++; know = 0;
+      box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash');
+      sound('psy_long');
+      if (id) banner(`Открыта карта: ${CARDS[id].name}`, 'win');
+      await sleep(700);
+      bar.style.transition = 'none'; bar.style.width = '0%';
+      lvl.textContent = level + 1; num.textContent = `0 / ${knowNeed(level)}`; nxt.textContent = `дальше: ${nextUnlockText(level)}`;
+      await sleep(250);
+    }
+  }
+  if (res.unlocked.length && document.body.contains(box)) showUnlocks(res.unlocked);
+}
+function showUnlocks(ids) {
+  openOverlay(`<div class="ov-box unlock-box"><h2>${ids.length > 1 ? 'Открыты новые карты' : 'Открыта новая карта'}</h2>
+    <p class="muted">Теперь ${ids.length > 1 ? 'они могут' : 'она может'} выпасть в наградах, у торговца и в событиях.</p>
+    <div class="card-row">${ids.map(id => cardHTML(mkCard(id), { cls: 'unlock-card' })).join('')}</div>
+    <button class="btn big" data-act="closeUnlock">Принять знание</button></div>`);
+  const prev = actions;
+  actions = { ...prev, closeUnlock: () => { closeOverlay(); actions = prev; } };
+}
+function metaTitleHTML() {
+  const need = knowNeed(meta.level);
+  const open = UNLOCK_ORDER.slice(0, meta.level).map(id => CARDS[id].name);
+  const tip = `<b>Путь знания — ступень ${meta.level + 1}</b><br>Знание копится после каждого забега: за этажи, бои, элиту, свечение кокона и победу над Хозяином. Заполненная шкала открывает новую карту, а следующая ступень длиннее.<hr>${UNLOCK_ORDER.map((id, i) => i < meta.level ? `✅ ${CARDS[id].name}` : '🔒 ???').join('<br>')}`;
+  return `<div class="t-know" data-tip="${esc(tip)}"><span>📜 Путь знания · ступень ${meta.level + 1}</span>
+    <div class="k-bar"><i style="width:${meta.know / need * 100}%"></i></div><small>${meta.know} / ${need} · открыто карт: ${open.length} из ${UNLOCK_ORDER.length}</small></div>`;
+}
+
+// ============================================================
 //  Карточки (HTML)
 // ============================================================
 const KW_RULES = [
   [/Защит[а-яё]*/g, 'Защита'], [/Осознани[а-яё]*/g, 'Осознание'], [/Личн[а-яё]* сил[а-яё]*/g, 'Личная сила'],
   [/Уязвимост[а-яё]*/g, 'Уязвимость'], [/Слабост[а-яё]*/g, 'Слабость'], [/Сгорает/g, 'Сгорает'],
-  [/Эфирная/g, 'Эфирная'], [/Неиграемая/g, 'Неиграемая'], [/Способность/g, 'Способность'],
+  [/Эфирная/g, 'Эфирная'], [/Неиграемая/g, 'Неиграемая'], [/Способность/g, 'Способность'], [/Удерживается/g, 'Удерживается'],
 ];
 function markKeywords(text, found) {
   for (const [re, k] of KW_RULES) text = text.replace(re, m => { found.add(k); return `<b class="kw">${m}</b>`; });
   return text;
 }
-const fmtPlain = { d: n => n, b: n => n, aw: () => '', tot: () => '' };
+const fmtPlain = { d: n => n, b: n => n, aw: () => '', tot: () => '', burned: () => '' };
 function fmtCombat(target) {
   return {
     d: n => { const v = playerDmg(n, target); return v === n ? `${v}` : `<span class="${v > n ? 'plus' : 'minus'}">${v}</span>`; },
     b: n => n,
     aw: () => ` <span class="aw-now">(сейчас ${cb.p.st.aware || 0})</span>`,
     tot: k => ` <span class="aw-now">(сейчас ${playerDmg(k * (cb.p.st.aware || 0), target)})</span>`,
+    burned: k => ` <span class="aw-now">(сейчас ${playerDmg(8 + k * cb.exhaust.length, target)})</span>`,
   };
 }
 function cardHTML(c, o = {}) {
   const d = CARDS[c.id];
   const cost = costOf(c);
   const found = new Set();
-  const desc = markKeywords(d.desc(c.up, o.combat ? fmtCombat(o.target || null) : fmtPlain), found);
+  const desc = markKeywords(d.desc(c.up, { ...(o.combat ? fmtCombat(o.target || null) : fmtPlain), c }), found);
   const tip = [...found].map(k => `<b>${k}</b><br>${KEYWORDS[k]}`).join('<hr>');
   return `<div class="card t-${d.type} r-${d.rarity} ${c.up ? 'up' : ''} ${o.cls || ''}" data-uid="${c.uid}" ${o.attrs || ''} ${tip && !o.noTip ? `data-tip="${esc(tip)}"` : ''} ${o.style ? `style="${o.style}"` : ''}>
     <div class="c-frame"></div>
@@ -569,6 +661,7 @@ function showTitle(fromIntro = false) {
         <button class="btn big ${saved ? 'ghost' : ''}" data-act="newRun">Новый путь</button>
         <button class="btn ghost" data-act="help">Как играть</button>
       </div>
+      ${metaTitleHTML()}
     </div>
     <p class="quote">«Воин принимает свою судьбу, какой бы она ни была, и принимает её с абсолютным смирением.»</p>
     <div class="t-audio">
@@ -671,7 +764,7 @@ function randomRelicId() {
   const pool = RELIC_POOL.filter(r => !run.relics.includes(r));
   return pool.length ? pick(pool) : null;
 }
-function cardPool(rarity) { return HEROES[run.hero].pool.filter(id => CARDS[id].rarity === rarity); }
+function cardPool(rarity) { return HEROES[run.hero].pool.filter(id => CARDS[id].rarity === rarity && cardUnlocked(id)); }
 function rollRarity(elite) {
   const r = Math.random() * 100;
   if (elite) return r < 10 ? 'rare' : r < 50 ? 'uncommon' : 'common';
@@ -1363,6 +1456,7 @@ function damagePlayer(d) {
   fx('hero', rest > 0 ? `-${rest}` : 'Блок', rest > 0 ? 'dmg' : 'blk', rest > 0 ? 'hurt' : 'parry', rest >= 8 ? 'shake' : rest > 0 ? 'slash' : 'ring:#8fc8ff');
   if (blocked > 0 && p.block === 0 && rest > 0) guardBreak();
   sfx(rest > 0 ? 'hurt' : 'block');
+  if (rest > 0 && p.st.tyrant && (cb.tyrantN || 0) < 2 && run.hp > 0) { cb.tyrantN = (cb.tyrantN || 0) + 1; G.aware(p.st.tyrant); fx('hero', '👺 Мелкий тиран учит', 'buff'); }
   if (hasRelic('hat') && !cb.hatUsed && run.hp > 0 && run.hp < run.maxHp / 2) { cb.hatUsed = true; G.block(12); fx('hero', '👒 Шляпа Хенаро', 'buff'); }
 }
 // Если героя переполняет Осознание, один из летунов меняет намерение и идёт его пожирать
@@ -1403,6 +1497,7 @@ const G = {
     }
   },
   getBlock() { return cb.p.block; },
+  burnedCount() { return cb.exhaust.length; },
   weakStrongest() { const t = alive().sort((a, b) => b.maxHp - a.maxHp)[0]; if (t) G.debuff(t, 'weak', 1); },
   discardCount() { return cb.discard.length; },
   stopWorld() { cb.stopWorld = true; fx('hero', '⏸️ Мир останавливается', 'buff', null, 'ring:#9fe2ff'); },
@@ -1490,7 +1585,7 @@ function drawCards(n) {
     }
     const c = cb.draw.pop();
     if (cb.hand.length >= 10) { cb.discard.push(c); toast('Рука полна'); }
-    else { cb.hand.push(c); cb.fresh.add(c.uid); }
+    else { c.held = 0; cb.hand.push(c); cb.fresh.add(c.uid); }
   }
 }
 
@@ -1538,7 +1633,8 @@ function startTurn() {
   cb.turn++;
   cb.reacted = false;
   if (cb.turn > 1) p.block = p.st.discipline ? Math.floor(p.block / 2) : 0;
-  cb.scarfUsed = false;
+  cb.scarfUsed = false; cb.tyrantN = 0;
+  delete p.st.inaccess;
   p.energy = p.maxEnergy;
   if (p.st.death) G.buffSelf('strength', p.st.death);
   if (p.st.sapped) { p.energy = Math.max(0, p.energy - p.st.sapped); fx('hero', `🩸 −${p.st.sapped} энергии`, 'debuff'); delete p.st.sapped; }
@@ -1588,13 +1684,13 @@ async function playCard(uid, target) {
   if (!cb || cb.over) return;
   if (d.type === 'attack') { if (HEROES[run.hero].poses) heroAttack(); else fx('hero', '', '', 'lunge'); }
   if (['double', 'fire', 'shift', 'might'].includes(c.id)) sound('mystic');
-  d.play(G, c.up, target);
-  delete c.tmpCost;
+  d.play(G, c.up, target, c);
+  delete c.tmpCost; c.held = 0;
   if (cb.p.st.echo && c.id !== 'double' && !d.exhaust && !cb.over) {
     delete cb.p.st.echo;
     fx('hero', '👥 Двойник повторяет', 'buff', null, 'ring:#c9b0ff');
     await sleep(260);
-    if (cb && !cb.over) d.play(G, c.up, target && !target.dead ? target : null);
+    if (cb && !cb.over) d.play(G, c.up, target && !target.dead ? target : null, c);
   }
   if (d.type === 'power') { /* способности исчезают */ }
   else if (d.exhaust) { cb.exhaust.push(c); }
@@ -1625,16 +1721,19 @@ async function endTurn() {
   const pile = stagePt(document.querySelector('.discard-pile'));
   [...document.querySelectorAll('#hand .card')].forEach((el, k) => {
     const c = cb.hand.find(x => x.uid === +el.dataset.uid);
+    if (c && CARDS[c.id].retain) return;
     flyCard(el, pile, c && CARDS[c.id].ethereal ? 'burn' : 'discard', k * 55);
   });
   delete p.st.echo;
+  const kept = [];
   for (const c of cb.hand) {
     delete c.tmpCost;
+    if (CARDS[c.id].retain) { c.held = (c.held || 0) + 1; kept.push(c); continue; }
     if (CARDS[c.id].endTurnHp) G.loseHp(CARDS[c.id].endTurnHp);
     if (CARDS[c.id].ethereal) { cb.exhaust.push(c); fx('hero', `${CARDS[c.id].name} сгорает`, 'info'); }
     else cb.discard.push(c);
   }
-  cb.hand = [];
+  cb.hand = kept;
   updateCombat();
   if (await checkCombatEnd()) return;
   await sleep(500);
@@ -1701,7 +1800,8 @@ async function doEnemyMove(e) {
     }
     if (p.st.fearless) { G.block(p.st.fearless); G.aware(1); fx('hero', '🐺 Страх побеждён', 'buff'); }
   }
-  if (m.drain) {
+  if ((m.drain || e.st.rage) && p.st.inaccess && (p.st.aware || 0) > 0) fx(e.uid, '🚪 недоступен', 'info');
+  if (m.drain && !p.st.inaccess) {
     const n = glowTier() >= 2 ? 0 : Math.max(0, Math.min(p.st.aware || 0, m.drain) - (hasRelic('mirror') ? 1 : 0));
     if (glowTier() >= 2 && (p.st.aware || 0) > 0) fx(e.uid, 'невкусно…', 'info');
     if (n > 0) {
@@ -1711,7 +1811,7 @@ async function doEnemyMove(e) {
     } else if ((p.st.aware || 0) > 0 && hasRelic('mirror')) fx('hero', '💠 отражено', 'buff');
   }
   // ярость: каждый ход летун дополнительно сжирает Осознание (даже мастерство второго внимания не спасает)
-  if (e.st.rage && (p.st.aware || 0) > 0 && !e.dead) {
+  if (e.st.rage && !p.st.inaccess && (p.st.aware || 0) > 0 && !e.dead) {
     const n = Math.min(p.st.aware, e.st.rage);
     addSt(p.st, 'aware', -n);
     fx('hero', `-${n} 👁️`, 'drain'); fx(e.uid, `🔥 сжирает осознание`, 'drain'); sfx('drain');
@@ -2305,6 +2405,7 @@ function gameOver() {
   sfx('lose');
   clearSave();
   cb = null;
+  const kres = awardKnowledge(false);
   actions = { title: () => { run = null; showTitle(); }, again: () => { const h = run.hero; newRun(h); } };
   beginSwap('death');
   app.innerHTML = `<div class="screen end-screen lose">
@@ -2313,11 +2414,14 @@ function gameOver() {
       <h1>Летуны насытились</h1>
       <p>Осознание Кастанеды поглощено. Но смерть — лишь советчица воина.</p>
       ${statsHTML()}
+      ${knowledgeHTML(kres)}
       <div class="row"><button class="btn big" data-act="again">Попробовать снова</button><button class="btn ghost" data-act="title">В меню</button></div>
     </div></div>`;
+  animateKnowledge(kres);
 }
 function showVictory() {
   clearSave();
+  const kres = awardKnowledge(true);
   actions = { title: () => { run = null; showTitle(); } };
   beginSwap('dawn');
   app.innerHTML = `<div class="screen end-screen win">
@@ -2327,9 +2431,11 @@ function showVictory() {
       <p>Хозяин летунов рассеялся в предрассветном тумане. Дон Хуан улыбается: «Теперь ты знаешь, кто питается тобой. Это только начало пути».</p>
       <div class="hero-row"><img src="${HEROES.castaneda.body}" alt=""><img src="${HEROES.donjuan.body}" alt=""><img src="${HEROES.genaro.body}" alt=""></div>
       ${statsHTML()}
+      ${knowledgeHTML(kres)}
       <p class="muted">Продолжение следует: Акт II, Дон Хуан и Дон Хенаро — в разработке.</p>
       <div class="row"><button class="btn big" data-act="title">В главное меню</button></div>
     </div></div>`;
+  animateKnowledge(kres);
 }
 
 // ============================================================

@@ -21,7 +21,8 @@ const HEROES = {
            'erase', 'mescalito', 'seeing', 'recap', 'ally', 'impecc',
            'shift', 'death', 'leap',
            'twin', 'dream', 'clarity', 'fearless', 'might', 'discipline',
-           'history', 'fibers', 'shiftint', 'recall', 'mimic', 'selfstalk', 'double', 'stopworld'],
+           'history', 'fibers', 'shiftint', 'recall', 'mimic', 'selfstalk', 'double', 'stopworld',
+           'inaccess', 'passes', 'tyrant', 'spot', 'rift'],   // последние пять открываются Путём знания
   },
   donjuan: {
     id: 'donjuan', name: 'Дон Хуан Матус', title: 'Нагваль', playable: false,
@@ -50,6 +51,7 @@ const KEYWORDS = {
   'Эфирная': 'Если карта осталась в руке в конце хода — она сгорает.',
   'Неиграемая': 'Эту карту нельзя разыграть.',
   'Способность': 'Действует до конца боя.',
+  'Удерживается': 'В конце хода карта не сбрасывается, а остаётся в руке.',
 };
 
 const STATUS_INFO = {
@@ -68,6 +70,8 @@ const STATUS_INFO = {
   intangible: { icon: '👻', name: 'Бесплотность', tip: 'До своего следующего хода получает вдвое меньше урона.' },
   thorns:     { icon: '🌵', name: 'Шипы', tip: 'Каждая ваша атака по нему наносит вам {n} урона.' },
   dream:      { icon: '💤', name: 'Сновидение', tip: 'В начале следующего хода возьмёте ещё {n} карт.' },
+  inaccess:   { icon: '🚪', name: 'Недоступность', tip: 'До вашего следующего хода летуны не могут съесть Осознание.' },
+  tyrant:     { icon: '👺', name: 'Мелкий тиран', tip: 'Когда вы теряете здоровье от удара: +{n} Осознание (не больше 2 раз за ход).' },
   fearless:   { icon: '🐺', name: 'Победа над страхом', tip: 'Когда враг накладывает на вас Слабость или Уязвимость: +{n} Защиты и +1 Осознание.' },
 };
 
@@ -264,6 +268,33 @@ const CARDS = {
     name: 'Неделание мира', type: 'skill', rarity: 'rare', cost: u => u ? 2 : 3, art: '⏸️', exhaust: true,
     desc: () => 'Остановите мир: в этот ход враги не действуют. Сгорает.',
     play: g => g.stopWorld(),
+  },
+
+  // ---------- открываются по мере продвижения по Пути знания (locked) ----------
+  inaccess: {
+    name: 'Недоступность', type: 'skill', rarity: 'common', cost: 1, art: '🚪', locked: true,
+    desc: (u, f) => `Получить ${f.b(u ? 11 : 8)} Защиты. До вашего следующего хода летуны не могут съесть Осознание.`,
+    play: (g, u) => { g.block(u ? 11 : 8); g.power('inaccess', 1); },
+  },
+  passes: {
+    name: 'Магические пассы', type: 'attack', rarity: 'common', cost: 1, target: 'enemy', art: '🤲', locked: true,
+    desc: (u, f) => `Нанести ${f.d(u ? 4 : 3)} урона 3 раза.`,
+    play: (g, u, t) => { for (let i = 0; i < 3; i++) g.hit(t, u ? 4 : 3); },
+  },
+  tyrant: {
+    name: 'Мелкий тиран', type: 'power', rarity: 'uncommon', cost: u => u ? 0 : 1, art: '👺', locked: true,
+    desc: () => 'Способность. Когда вы теряете здоровье от удара, получите 1 Осознание (не больше 2 раз за ход).',
+    play: g => g.power('tyrant', 1),
+  },
+  spot: {
+    name: 'Своё место', type: 'skill', rarity: 'uncommon', cost: 1, art: '🏜️', locked: true, retain: true,
+    desc: (u, f) => `Удерживается. Получить ${f.b(u ? 9 : 6)} Защиты +3 за каждый ход, что карта пролежала в руке (до 4)${f.c && f.c.held ? ` <span class="aw-now">(сейчас ${(u ? 9 : 6) + 3 * Math.min(4, f.c.held)})</span>` : ''}.`,
+    play: (g, u, t, c) => g.block((u ? 9 : 6) + 3 * Math.min(4, (c && c.held) || 0)),
+  },
+  rift: {
+    name: 'Трещина между мирами', type: 'attack', rarity: 'rare', cost: 2, target: 'enemy', art: '🌀', locked: true,
+    desc: (u, f) => `Нанести ${f.d(8)} урона +${u ? 6 : 4} за каждую карту, сгоревшую в этом бою${f.burned(u ? 6 : 4)}.`,
+    play: (g, u, t) => g.hit(t, 8 + (u ? 6 : 4) * g.burnedCount()),
   },
 
   // ---------- уникальные: только из событий ----------
