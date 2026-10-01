@@ -306,8 +306,8 @@ const ENEMIES = {
       thicken: { name: 'Сгущение', block: 12, buff: { strength: 1 } },
       envelop: { name: 'Обволакивание', dmg: 12 },
       cling: { name: 'Вцепляется!', dmg: 6, cling: true },
-      sap: { name: 'Высасывание сил', dmg: 8, heal: 8, sap: 1 },
-      nightmare: { name: 'Кошмарные сны', dmg: 5, addCards: { id: 'nightmare', n: 2, to: 'draw' } },
+      sap: { name: 'Высасывание сил', dmg: 9, heal: 9, sap: 1 },
+      nightmare: { name: 'Кошмарные сны', dmg: 7, addCards: { id: 'nightmare', n: 2, to: 'draw' } },
       reform: { name: 'Собирается заново', block: 10 },
     },
     // вцепляется, если в начале его хода на герое нет Защиты (проверка — в doEnemyMove)
