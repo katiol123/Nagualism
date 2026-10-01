@@ -1269,6 +1269,7 @@ const G = {
     }
   },
   getBlock() { return cb.p.block; },
+  weakStrongest() { const t = alive().sort((a, b) => b.maxHp - a.maxHp)[0]; if (t) G.debuff(t, 'weak', 1); },
   discardCount() { return cb.discard.length; },
   stopWorld() { cb.stopWorld = true; fx('hero', '⏸️ Мир останавливается', 'buff', null, 'ring:#9fe2ff'); },
   discountTop() {
@@ -1380,6 +1381,7 @@ function startCombat(kind, list = null, bonusGold = 0) {
   renderCombatShell();
   run.relics.forEach(r => RELICS[r].combatStart && RELICS[r].combatStart(G));
   if (run.bonusAware) G.aware(run.bonusAware);
+  if (run.flags.weakNext) { delete run.flags.weakNext; addSt(cb.p.st, 'weak', 1); fx('hero', '🥀 место врага', 'debuff'); }
   if (glowTier() >= 1) { G.aware(1); fx('hero', 'Мастер первого внимания', 'buff'); }
   if (hasRelic('stone')) cb.enemies.forEach(e => addSt(e.st, 'strength', 1));
   cb.reacted = true;          // до первого хода игрока летуны не реагируют
