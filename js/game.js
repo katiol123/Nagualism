@@ -1461,7 +1461,7 @@ function damagePlayer(d) {
   if (rest > 0 && p.st.tyrant && (cb.tyrantN || 0) < 2 && run.hp > 0) { cb.tyrantN = (cb.tyrantN || 0) + 1; G.aware(p.st.tyrant); fx('hero', '👺 Мелкий тиран учит', 'buff'); }
   if (hasRelic('hat') && !cb.hatUsed && run.hp > 0 && run.hp < run.maxHp / 2) { cb.hatUsed = true; G.block(12); fx('hero', '👒 Шляпа Хенаро', 'buff'); }
 }
-// Заклинатель, оставшись один, сразу меняет намерение на призыв
+// Древний видящий, оставшись один, сразу меняет намерение на призыв
 function summonerCheck() {
   for (const s of alive()) {
     if (!s.def.summoner || s.move === 'summon' || alive().some(x => x !== s)) continue;

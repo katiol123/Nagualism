@@ -129,7 +129,59 @@ function beastSVG(o) {
     <path d="M90 70 L 96 54 L 102 70 M120 66 L 126 48 L 132 66 M150 68 L 156 52 L 162 70" stroke="${o.fur}" stroke-width="5" fill="none"/>
   </g></svg>`;
 }
+// Древний видящий — тольтекский маг старых времён в светящемся коконе, с посохом из обсидиана
+function seerSVG(o) {
+  const id = 'se' + (svgSeq++);
+  return `<svg viewBox="0 0 220 250" class="flyer-svg seer-svg" style="width:${o.w}px">
+  <defs>
+    <radialGradient id="${id}egg" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="#bfffe0" stop-opacity=".16"/><stop offset=".75" stop-color="#5fd18a" stop-opacity=".07"/><stop offset="1" stop-color="#5fd18a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="${id}robe" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2a4e"/><stop offset=".7" stop-color="#1a1226"/><stop offset="1" stop-color="#1a1226" stop-opacity="0"/></linearGradient>
+    <linearGradient id="${id}hood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a3662"/><stop offset="1" stop-color="#160e20"/></linearGradient>
+    <filter id="${id}g" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="${id}s" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7"/></filter>
+  </defs>
+  <ellipse cx="110" cy="244" rx="52" ry="6" fill="#000" opacity=".35"/>
+  <g class="bob">
+    <!-- светящийся кокон и волокна -->
+    <ellipse cx="112" cy="122" rx="84" ry="112" fill="url(#${id}egg)" stroke="#9dffcf" stroke-opacity=".35" stroke-width="1.5">
+      <animate attributeName="stroke-opacity" values=".2;.5;.2" dur="3.2s" repeatCount="indefinite"/></ellipse>
+    <g stroke="#bfffe0" stroke-width=".8" fill="none" opacity=".28">
+      <path d="M78 16 Q 70 120 84 232"/><path d="M98 11 Q 94 120 100 234"/><path d="M128 11 Q 136 120 126 234"/><path d="M150 18 Q 162 120 146 230"/>
+    </g>
+    <!-- точка сборки: у старых видящих сдвинута далеко -->
+    <circle cx="164" cy="92" r="9" fill="#e8fff2" filter="url(#${id}g)" opacity=".9"><animate attributeName="r" values="7;10;7" dur="2.4s" repeatCount="indefinite"/></circle>
+    <!-- посох с обсидианом -->
+    <path d="M50 62 L 60 230" stroke="#5a3b22" stroke-width="5" stroke-linecap="round"/>
+    <path d="M50 62 L 60 230" stroke="#8a6a44" stroke-width="1.5" stroke-linecap="round" opacity=".6"/>
+    <circle cx="48" cy="50" r="14" fill="#5fd18a" filter="url(#${id}s)" opacity=".55"/>
+    <polygon points="48,30 58,48 50,66 39,50" fill="#0d0a14" stroke="#9dffcf" stroke-width="1.2"/>
+    <polygon points="48,30 50,66 39,50" fill="#2a3a34" opacity=".8"/>
+    <path d="M44 66 Q 40 74 46 80 M52 66 Q 58 76 52 82" stroke="#c9a050" stroke-width="1.5" fill="none"/>
+    <!-- мантия -->
+    <path d="M110 70 C 80 72, 70 120, 64 160 C 58 200, 66 226, 72 238 L 152 238 C 158 226, 166 200, 158 160 C 152 120, 140 72, 110 70 Z" fill="url(#${id}robe)"/>
+    <path d="M70 196 L 78 188 L 86 196 L 94 188 L 102 196 L 110 188 L 118 196 L 126 188 L 134 196 L 142 188 L 150 196" stroke="#c9a050" stroke-width="2" fill="none" opacity=".75"/>
+    <path d="M72 204 L 152 204" stroke="#3fa58a" stroke-width="1.5" opacity=".6"/>
+    <path d="M110 92 L 110 236" stroke="#000" stroke-opacity=".3" stroke-width="2"/>
+    <!-- рука на посохе -->
+    <path d="M86 100 Q 66 110 56 104" stroke="#2c1f3c" stroke-width="13" fill="none" stroke-linecap="round"/>
+    <ellipse cx="54" cy="104" rx="6.5" ry="7.5" fill="#7a5238"/>
+    <!-- вторая рука, поднятая в призыве -->
+    <path d="M136 104 Q 156 98 160 80" stroke="#2c1f3c" stroke-width="12" fill="none" stroke-linecap="round"/>
+    <path d="M156 78 L 152 66 M160 76 L 160 62 M164 78 L 168 66" stroke="#7a5238" stroke-width="3.5" stroke-linecap="round"/>
+    <!-- капюшон и лицо -->
+    <path d="M110 20 C 82 20, 72 48, 74 78 C 76 92, 84 100, 92 104 L 128 104 C 136 100, 144 92, 146 78 C 148 48, 138 20, 110 20 Z" fill="url(#${id}hood)"/>
+    <path d="M110 34 C 94 34, 88 52, 90 68 C 92 80, 100 88, 110 88 C 120 88, 128 80, 130 68 C 132 52, 126 34, 110 34 Z" fill="#0a0610"/>
+    <path d="M96 52 C 98 46, 122 46, 124 52 C 126 66, 120 76, 110 78 C 100 76, 94 66, 96 52 Z" fill="#6a4630"/>
+    <path d="M98 56 Q 104 53 108 56 M112 56 Q 116 53 122 56" stroke="#2a160c" stroke-width="1.6" fill="none"/>
+    <circle cx="103" cy="60" r="2.6" fill="${o.eye}" filter="url(#${id}g)"/><circle cx="117" cy="60" r="2.6" fill="${o.eye}" filter="url(#${id}g)"/>
+    <path d="M100 66 Q 103 68 106 66 M114 66 Q 117 68 120 66 M104 50 L 116 50" stroke="#3a2214" stroke-width="1" fill="none" opacity=".8"/>
+    <!-- седая борода -->
+    <path d="M98 70 C 98 82, 100 104, 110 126 C 120 104, 122 82, 122 70 C 116 76, 104 76, 98 70 Z" fill="#d8d2c4"/>
+    <path d="M104 80 L 108 112 M110 80 L 110 120 M116 80 L 112 112" stroke="#a49c8c" stroke-width="1" opacity=".8"/>
+  </g></svg>`;
+}
 function enemyArt(a) {
+  if (a.kind === 'seer') return seerSVG(a);
   if (a.cloud) return cloudSVG(a);
   if (a.kind === 'human') return humanSVG(a);
   if (a.kind === 'crystal') return crystalSVG(a);
@@ -319,10 +371,10 @@ const ENEMIES = {
     },
   },
 
-  // мини-босс-призыватель: один — всегда зовёт тенистого летуна; со свитой — усиливает её или лечит
+  // мини-босс Древний видящий: один — всегда зовёт тенистого летуна; со свитой — усиливает её или лечит
   summoner: {
-    name: 'Заклинатель теней', hp: [70, 74], elite: true, miniboss: true, summoner: true, reward: 'rattle',
-    art: { w: 225, body: '#140b22', body2: '#463066', wing: '#07040e', eye: '#9dff6a', eyeR: 6, body3: 'hood', wings: 'tatter', mouth: 'maw', extras: ['hoodtop', 'tendrils'], accent: '#5fd18a' },
+    name: 'Древний видящий', hp: [70, 74], elite: true, miniboss: true, summoner: true, reward: 'rattle',
+    art: { kind: 'seer', w: 230, eye: '#9dffcf' },
     moves: {
       summon: { name: 'Призыв тени', block: 8, summon: ['shade'] },
       empower: { name: 'Покров тьмы', groupBuff: { empower: 3, ward: 1 } },
