@@ -113,7 +113,7 @@ const CARDS = {
 
   // ---------- обычные ----------
   stalk: {
-    name: 'Охота на добычу', type: 'attack', rarity: 'common', cost: 1, target: 'enemy', art: '🐾',
+    name: 'Ловушка охотника', type: 'attack', rarity: 'common', cost: 1, target: 'enemy', art: '🐾',
     desc: (u, f) => `Нанести ${f.d(u ? 9 : 7)} урона. Наложить ${u ? 2 : 1} Уязвимость.`,
     play: (g, u, t) => { g.hit(t, u ? 9 : 7); g.debuff(t, 'vulnerable', u ? 2 : 1); },
   },
@@ -287,7 +287,7 @@ const CARDS = {
     play: g => g.power('tyrant', 1),
   },
   spot: {
-    name: 'Своё место', type: 'skill', rarity: 'uncommon', cost: 1, art: '🏜️', locked: true, retain: true,
+    name: 'Место силы', type: 'skill', rarity: 'uncommon', cost: 1, art: '🏜️', locked: true, retain: true,
     desc: (u, f) => `Удерживается. Получить ${f.b(u ? 9 : 6)} Защиты +3 за каждый ход, что карта пролежала в руке (до 4)${f.c && f.c.held ? ` <span class="aw-now">(сейчас ${(u ? 9 : 6) + 3 * Math.min(4, f.c.held)})</span>` : ''}.`,
     play: (g, u, t, c) => g.block((u ? 9 : 6) + 3 * Math.min(4, (c && c.held) || 0)),
   },
