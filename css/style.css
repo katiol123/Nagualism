@@ -678,3 +678,22 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .card.r-unique::after { content: ''; position: absolute; inset: 0; border-radius: 11px; pointer-events: none;
   background: linear-gradient(115deg, transparent 30%, rgba(220, 180, 255, .28) 45%, transparent 60%) 0 0 / 300% 100%; animation: foil 3s linear infinite; }
 .uniq { color: #d9b0ff; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+
+/* герой получает урон: дрожь + красная вспышка точно по силуэту */
+.unit.hero.hurt .sprite { animation: hero-shake .5s cubic-bezier(.36, .07, .19, .97); }
+.unit.hero .sprite::before { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at 50% 40%, #ff3a2a, #c00010 70%);
+  -webkit-mask: var(--spr) center bottom / contain no-repeat; mask: var(--spr) center bottom / contain no-repeat; }
+.unit.hero.hurt .sprite::before { animation: hero-red .6s ease-out; }
+.unit.hero.hurt .sprite img { animation: hero-tint .6s ease-out; }
+@keyframes hero-shake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  10% { transform: translate(-9px, 1px) rotate(-1.5deg); }
+  25% { transform: translate(8px, -1px) rotate(1.2deg); }
+  40% { transform: translate(-6px, 1px) rotate(-.8deg); }
+  55% { transform: translate(5px, 0) rotate(.6deg); }
+  70% { transform: translate(-3px, 0); }
+  85% { transform: translate(2px, 0); }
+}
+@keyframes hero-red { 0% { opacity: 0; } 12% { opacity: .62; } 100% { opacity: 0; } }
+@keyframes hero-tint { 15% { filter: drop-shadow(0 0 18px rgba(255, 40, 30, .9)) brightness(1.15); } }
