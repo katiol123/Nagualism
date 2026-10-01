@@ -176,6 +176,7 @@ function loadSave() {
     uidSeq = Math.max(1, ...r.deck.map(c => c.uid), ...JSON.stringify(r).match(/"uid":\d+/g).map(x => +x.slice(6))) + 1;
     r.potions = r.potions || Array(POTION_SLOTS).fill(null);
     r.flags = r.flags || {};
+    r.curses = r.curses || [];
     return r;
   } catch (e) { return null; }
 }
@@ -301,7 +302,7 @@ function topBar() {
     <div class="tb-stat" data-tip="Песо">💰 <b>${run.gold}</b></div>
     ${potionSlotsHTML()}
     ${glowHTML()}
-    <div class="tb-relics">${run.relics.map(r => relicHTML(r)).join('')}</div>
+    <div class="tb-relics">${(run.curses || []).map(c => `<span class="relic curse" data-tip="${esc(`<b>${CURSES[c].name}</b><br>${CURSES[c].desc}<br><i>Снимается «Святой водой курандеры» или у курандеры.</i>`)}">${CURSES[c].icon}</span>`).join('')}${run.relics.map(r => relicHTML(r)).join('')}</div>
     <div class="tb-floor" data-tip="Акт I · Пустыня летунов">Акт I · Этаж ${run.floor}</div>
     <button class="tb-btn" data-act="deck" data-tip="Посмотреть колоду">🂠 <b>${run.deck.length}</b></button>
     <button class="tb-btn ${musicMuted ? 'off' : ''}" data-act="music" data-tip="Музыка">🎵</button>
@@ -399,8 +400,11 @@ function showHelp() {
     <p><b>Осознание 👁️</b> — ресурс Кастанеды. Копите его и тратьте: «Вспышка осознания» бьёт всех врагов, «Удар намерения» тратит 1 очко на второй удар, «Сдвиг точки сборки» — мощный одиночный удар, «Перепросмотр» даёт Защиту.
       Но летуны питаются осознанием: съеденное делает их сильнее.</p>
     <p><b>Свечение кокона ✨.</b> Осознание, оставшееся после победы, переходит в свечение и копится через весь забег:
-      10 — <b>Первое внимание</b> (+1 Осознание в начале боя), 20 — <b>Второе внимание</b> (летуны перестают пожирать Осознание),
-      30 — <b>Третье внимание</b> (каждый бой начинается с картой «Огонь изнутри»).</p>
+      10 — <b>Мастер первого внимания</b> (+1 Осознание в начале боя), 20 — <b>Мастер второго внимания</b> (летуны перестают пожирать Осознание),
+      30 — <b>Мастер третьего внимания</b> (каждый бой начинается с картой «Огонь изнутри»).</p>
+    <p><b>Редкие летуны и проклятия.</b> Изредка встречаются редкие летуны. Шепчущий летун и Летун дрожи, если их удар пробьёт Защиту,
+      накладывают постоянное проклятие (🕸️ на 1 карту меньше в наградах, 🖐️ зелья разливаются с шансом 50%).
+      Снять его можно «Святой водой курандеры» или у курандеры. <b>Тёмное облако</b> вцепляется в героя без Защиты — сорвите его 15+ уроном за ход.</p>
     <p><b>Ярость.</b> На 6-м ходу (элиты — на 7-м, босс — на 14-м) летуны впадают в ярость.
       Каждый их ход, помимо обычного действия, каждый летун сжирает 2 Осознания — затягивая бой, вы теряете осознанность.
       Быстрая победа приносит больше песо.</p>
@@ -515,7 +519,7 @@ function newRun(heroId) {
     map: genMap(), pos: null, path: [], floor: 0, fights: 0,
     seenEvents: [], stats: { kills: 0, elites: 0, cards: 0 },
     potions: Array(POTION_SLOTS).fill(null), potionChance: 40,
-    flags: {}, bonusAware: 0, room: { type: 'neow' },
+    flags: {}, bonusAware: 0, room: { type: 'neow' }, curses: [],
   };
   gainRelic(h.relic);
   save();
@@ -606,6 +610,15 @@ const evApi = {
   hasPotionSlot: () => hasPotionSlot(),
   randomPotion: () => { const p = randomPotionId(); gainPotion(p); return p; },
   unlockContemplation: () => { run.flags.contemplation = true; },
+  uncurse: () => { run.curses = []; sfx('buff'); },
+  curse: id => { if (!run.curses.includes(id)) run.curses.push(id); sfx('drain'); },
+  relic: id => { if (!hasRelic(id)) gainRelic(id); sfx('buff'); },
+  addCard: id => { run.deck.push(mkCard(id)); sfx('buff'); },
+  maxHp: n => { run.maxHp = Math.max(1, run.maxHp + n); run.hp = Math.min(run.maxHp, Math.max(1, run.hp + Math.max(0, n))); },
+  gold: n => { run.gold = Math.max(0, run.gold + n); if (n > 0) sfx('gold'); },
+  chance: p => Math.random() < p,
+  // бой с уникальным противником и уникальной наградой
+  fightFor: (list, extra) => { run.room = { type: 'combat', kind: 'event', list, extra }; save(); startCombat('event', list, 0); },
 };
 function eventResult(ev, text, inPlace = false) {
   actions = { next: () => showMap() };
@@ -786,12 +799,15 @@ function enterNode(k) {
   // Комната фиксируется при входе и сохраняется: выход в меню не даст переиграть узел
   switch (type) {
     case 'boss': run.room = { type: 'combat', kind: 'boss', list: ENCOUNTERS.boss[0] }; break;
-    case 'monster': run.room = { type: 'combat', kind: 'monster', list: pick(run.fights < 3 ? ENCOUNTERS.easy : ENCOUNTERS.hard) }; break;
+    case 'monster': run.room = { type: 'combat', kind: 'monster', list: pick(run.fights < 3 ? ENCOUNTERS.easy : Math.random() < 0.2 ? ENCOUNTERS.rare : ENCOUNTERS.hard) }; break;
     case 'elite': run.room = { type: 'combat', kind: 'elite', list: pick(ENCOUNTERS.elite) }; break;
     case 'event': {
-      let pool = EVENTS.filter(e => !run.seenEvents.includes(e.id) && !(e.id === 'cave' && canContemplate()));
-      if (!pool.length) { run.seenEvents = []; pool = EVENTS.filter(e => e.id !== 'cave'); }
+      const ok = e => !(e.id === 'cave' && canContemplate()) && !(e.once && run.flags['ev_' + e.id]);
+      let pool = EVENTS.filter(e => !run.seenEvents.includes(e.id) && ok(e));
+      if (!pool.length) { run.seenEvents = []; pool = EVENTS.filter(ok); }
+      if (!pool.length) pool = EVENTS.filter(e => !e.once);
       const ev = pick(pool); run.seenEvents.push(ev.id);
+      if (ev.once) run.flags['ev_' + ev.id] = true;
       run.room = { type: 'event', id: ev.id };
       break;
     }
@@ -910,6 +926,7 @@ function makeShopStock() {
   const r2 = RELIC_POOL.filter(r => !run.relics.includes(r) && r !== r1); if (r2.length) stock.relics.push({ id: pick(r2), price: Math.round(rnd(190, 240) * k), sold: false });
   const pprice = { common: 55, uncommon: 75, rare: 100 };
   for (let i = 0; i < 3; i++) { const id = randomPotionId(); stock.potions.push({ id, price: Math.round(pprice[POTIONS[id].rarity] * (0.9 + Math.random() * 0.2) * k), sold: false }); }
+  if (run.curses.length && !stock.potions.some(x => x.id === 'holy')) stock.potions[0] = { id: 'holy', price: Math.round(80 * k), sold: false };
   // Одна случайная карта со скидкой
   const sale = stock.cards[rnd(0, stock.cards.length - 1)];
   sale.sale = true; sale.price = Math.floor(sale.price / 2);
@@ -981,7 +998,7 @@ let enemySeq = 1;
 function mkEnemy(id) {
   const d = ENEMIES[id];
   const hp = rnd(d.hp[0], d.hp[1]);
-  return { uid: 'e' + (enemySeq++), id, def: d, name: d.name, hp, maxHp: hp, block: 0, st: {}, hist: [], turn: 0, move: null, dead: false, seed: rnd(0, 99) };
+  return { uid: 'e' + (enemySeq++), id, def: d, name: d.name, hp, maxHp: hp, block: 0, st: d.thorns ? { thorns: d.thorns } : {}, hist: [], turn: 0, move: null, dead: false, seed: rnd(0, 99) };
 }
 const alive = () => cb.enemies.filter(e => !e.dead);
 // null — можно; иначе текст причины
@@ -1138,8 +1155,17 @@ function toast(text) {
 }
 
 // ---- API карт ----
+function thornsBack(e) {
+  fx(e.uid, '🌵', 'info');
+  damagePlayer(e.def.thorns);
+}
 function damageEnemy(e, d) {
   if (e.dead) return false;
+  if (e.st.intangible) d = Math.floor(d / 2);
+  if (e.clinging) {          // облако срывается, если за ход нанести ему 15+ урона
+    e.turnDmg = (e.turnDmg || 0) + d;
+    if (e.turnDmg >= 15 && d > 0) setTimeout(() => detachCloud(e), 0);
+  }
   const blocked = Math.min(e.block, d);
   e.block -= blocked;
   const rest = d - blocked;
@@ -1193,9 +1219,12 @@ const G = {
   hit(t, base) {
     if (!t || t.dead) t = alive()[0];
     if (!t) return false;
-    return damageEnemy(t, playerDmg(base, t));
+    if (hasRelic('scarf') && !cb.scarfUsed) { cb.scarfUsed = true; base += 4; }
+    const killed = damageEnemy(t, playerDmg(base, t));
+    if (t.def.thorns) thornsBack(t);
+    return killed;
   },
-  hitAll(base) { alive().forEach(e => damageEnemy(e, playerDmg(base, e))); },
+  hitAll(base) { alive().forEach(e => { damageEnemy(e, playerDmg(base, e)); if (e.def.thorns) thornsBack(e); }); },
   block(n) { cb.p.block += n; fx('hero', `+${n} 🛡`, 'blk', null, 'ring:#8fc8ff'); sfx('block'); },
   draw(n) { drawCards(n); },
   energy(n) { cb.p.energy += n; fx('hero', `+${n} ⚡`, 'info'); },
@@ -1209,6 +1238,16 @@ const G = {
     }
   },
   getBlock() { return cb.p.block; },
+  debuffRandom() { const t = pick(alive()); if (t) { G.debuff(t, 'weak', 2); G.debuff(t, 'vulnerable', 1); } },
+  burnUnplayable() {
+    const bad = cb.hand.filter(c => CARDS[c.id].unplayable);
+    if (!bad.length) { fx('hero', 'нечего сжигать', 'info'); return; }
+    cb.hand = cb.hand.filter(c => !CARDS[c.id].unplayable);
+    cb.exhaust.push(...bad);
+    fx('hero', `🔥 сожжено: ${bad.length}`, 'buff', null, 'burst:#ff9a3c');
+    drawCards(bad.length);
+  },
+  uncurse() { run.curses = []; fx('hero', 'Проклятия сняты', 'buff', null, 'ring:#ffffff'); refreshTop(); },
   // «чистый» урон: не зависит от Личной силы и Слабости (зелья, реликвии)
   pierce(t, n) { if (!t || t.dead) t = alive()[0]; if (t) damageEnemy(t, t.st.vulnerable ? Math.floor(n * 1.5) : n); },
   pierceRandom(n) { const t = pick(alive()); if (t) { damageEnemy(t, n); } },
@@ -1255,7 +1294,7 @@ function startCombat(kind, list = null, bonusGold = 0) {
   renderCombatShell();
   run.relics.forEach(r => RELICS[r].combatStart && RELICS[r].combatStart(G));
   if (run.bonusAware) G.aware(run.bonusAware);
-  if (glowTier() >= 1) { G.aware(1); fx('hero', 'Первое внимание', 'buff'); }
+  if (glowTier() >= 1) { G.aware(1); fx('hero', 'Мастер первого внимания', 'buff'); }
   if (hasRelic('stone')) cb.enemies.forEach(e => addSt(e.st, 'strength', 1));
   cb.reacted = true;          // до первого хода игрока летуны не реагируют
   cb.enemies.forEach(chooseIntent);
@@ -1271,16 +1310,20 @@ function chooseIntent(e) {
 }
 
 function startTurn() {
-  if (cb.over) return;
+  if (!cb || cb.over) return;
   const p = cb.p;
   cb.turn++;
   cb.reacted = false;
-  if (cb.turn > 1) p.block = 0;
+  if (cb.turn > 1) p.block = p.st.discipline ? Math.floor(p.block / 2) : 0;
+  cb.scarfUsed = false;
   p.energy = p.maxEnergy;
   if (p.st.death) G.buffSelf('strength', p.st.death);
+  if (p.st.sapped) { p.energy = Math.max(0, p.energy - p.st.sapped); fx('hero', `🩸 −${p.st.sapped} энергии`, 'debuff'); delete p.st.sapped; }
+  cb.enemies.forEach(e => { e.turnDmg = 0; });
   drawCards(5);
+  if (p.st.scout) drawCards(p.st.scout);
   if (p.st.dream) { const n = p.st.dream; delete p.st.dream; fx('hero', `💤 +${n} карта`, 'buff'); drawCards(n); }
-  if (cb.turn === 1 && glowTier() >= 3) { const c = mkCard('fire'); if (cb.hand.length < 10) { cb.hand.push(c); cb.fresh.add(c.uid); } fx('hero', 'Третье внимание', 'buff'); }
+  if (cb.turn === 1 && glowTier() >= 3) { const c = mkCard('fire'); if (cb.hand.length < 10) { cb.hand.push(c); cb.fresh.add(c.uid); } fx('hero', 'Мастер третьего внимания', 'buff'); }
   if (cb.turn === cb.rageTurn && !cb.raged) {
     cb.raged = true;
     alive().forEach(e => { addSt(e.st, 'rage', 2); fx(e.uid, '🔥 Ярость', 'debuff', 'pulse'); });
@@ -1289,7 +1332,7 @@ function startTurn() {
   run.relics.forEach(r => RELICS[r].turnStart && RELICS[r].turnStart(G, cb.turn));
   cb.busy = false;
   sfx('turn');
-  banner(cb.turn === 1 ? (cb.kind === 'boss' ? 'Хозяин летунов' : cb.kind === 'elite' ? 'Элитный летун' : 'Бой') : 'Ваш ход', cb.turn === 1 && cb.kind !== 'monster' ? 'danger' : '');
+  banner(cb.turn === 1 ? (cb.kind === 'boss' ? 'Хозяин летунов' : cb.enemies.some(e => e.def.miniboss) ? 'Тёмное облако' : cb.enemies.some(e => e.def.unique) ? 'Особый противник' : cb.kind === 'elite' ? 'Элитный летун' : cb.enemies.some(e => e.def.rare) ? 'Редкий летун' : 'Бой') : 'Ваш ход', cb.turn === 1 && cb.kind !== 'monster' ? 'danger' : '');
   updateCombat();
 }
 
@@ -1353,6 +1396,7 @@ async function endTurn() {
     flyCard(el, pile, c && CARDS[c.id].ethereal ? 'burn' : 'discard', k * 55);
   });
   for (const c of cb.hand) {
+    if (CARDS[c.id].endTurnHp) G.loseHp(CARDS[c.id].endTurnHp);
     if (CARDS[c.id].ethereal) { cb.exhaust.push(c); fx('hero', `${CARDS[c.id].name} сгорает`, 'info'); }
     else cb.discard.push(c);
   }
@@ -1383,8 +1427,11 @@ async function endTurn() {
 }
 
 async function doEnemyMove(e) {
-  const m = e.def.moves[e.move];
   const p = cb.p;
+  delete e.st.intangible;
+  if (e.def.art && e.def.art.cloud && !e.clinging && e.move !== 'reform' && p.block === 0) { e.move = 'cling'; e.hist[e.hist.length - 1] = 'cling'; }
+  const m = e.def.moves[e.move];
+  const hp0 = run.hp;
   fx(e.uid, m.name, 'movename', m.dmg ? 'attack' : 'pulse');
   updateCombat();
   await sleep(300);
@@ -1400,6 +1447,16 @@ async function doEnemyMove(e) {
     }
   }
   if (m.heal) { e.hp = Math.min(e.maxHp, e.hp + m.heal); fx(e.uid, `+${m.heal} ❤`, 'heal'); }
+  if (m.sap) { addSt(p.st, 'sapped', m.sap); fx('hero', '🩸 Истощение', 'debuff'); }
+  if (m.cling) clingCloud(e);
+  // проклятие ложится, если удар пробил Защиту
+  if (m.curse && run.hp < hp0 && !run.curses.includes(m.curse)) {
+    run.curses.push(m.curse); cb.cursedNow = m.curse;
+    fx('hero', `${CURSES[m.curse].icon} ${CURSES[m.curse].name}`, 'drain', 'hurt', 'ring:#9a4cff');
+    sfx('drain');
+    setTimeout(() => { if (cb && !cb.over) banner(CURSES[m.curse].name, 'danger'); }, 300);
+    refreshTop();
+  }
   if (m.debuff) {
     for (const [k, v] of Object.entries(m.debuff)) {
       addSt(p.st, k, v); cb.justApplied.add(k);
@@ -1416,7 +1473,7 @@ async function doEnemyMove(e) {
       fx('hero', `-${n} 👁️`, 'drain'); fx(e.uid, `съел осознание: 💪 +${str}`, 'drain'); sfx('drain');
     } else if ((p.st.aware || 0) > 0 && hasRelic('mirror')) fx('hero', '💠 отражено', 'buff');
   }
-  // ярость: каждый ход летун дополнительно сжирает Осознание (даже Второе внимание не спасает)
+  // ярость: каждый ход летун дополнительно сжирает Осознание (даже мастерство второго внимания не спасает)
   if (e.st.rage && (p.st.aware || 0) > 0 && !e.dead) {
     const n = Math.min(p.st.aware, e.st.rage);
     addSt(p.st, 'aware', -n);
@@ -1455,9 +1512,14 @@ function intentInfo(e) {
   if (m.buff) { icons.push('⬆️'); tip.push('Усиливается.'); }
   if (m.debuff) { icons.push('🌀'); tip.push('Накладывает: ' + Object.entries(m.debuff).map(([k, v]) => `${STATUS_INFO[k].name} ${v}`).join(', ') + '.'); }
   if (e.st.rage) { icons.push('🔥👁️'); tip.push(`В ярости: дополнительно сожрёт ${e.st.rage} Осознания.`); }
-  if (m.drain && glowTier() >= 2) tip.push('Ваше осознание ему невкусно (Второе внимание).');
+  if (m.drain && glowTier() >= 2) tip.push('Ваше осознание ему невкусно (вы — мастер второго внимания).');
   else if (m.drain) { icons.push('👁️'); tip.push(m.drain >= 99 ? `Съест всё ваше Осознание и станет сильнее${m.drainStr ? ` (не больше чем на ${m.drainStr})` : ' на столько же'}.` : `Съест до ${m.drain} Осознания и станет сильнее на столько же.`); }
   if (m.cleanse) tip.push('Снимет с себя ослабления.');
+  if (m.curse) { icons.push(run.curses.includes(m.curse) ? '' : '🕸️'); if (!run.curses.includes(m.curse)) tip.push(`Если удар пробьёт Защиту — наложит постоянное проклятие «${CURSES[m.curse].name}»: ${CURSES[m.curse].desc}`); }
+  if (m.sap) { icons.push('🩸'); tip.push('Высосет силы: −1 энергия в ваш следующий ход.'); }
+  if (e.def.art && e.def.art.cloud && !e.clinging && e.move !== 'reform') { icons.push('☁️'); tip.push('<b>Если в начале его хода на вас нет Защиты — вцепится</b> и начнёт высасывать силы и насылать кошмары. Сорвать: 15+ урона за один ход.'); }
+  if (e.clinging) tip.push('Вцепился в вас! Нанесите 15+ урона за ход, чтобы сорвать.');
+  if (e.def.thorns) tip.push(`Шипы: каждая ваша атака по нему — ${e.def.thorns} урона вам.`);
   if (m.heal) tip.push(`Восстановит ${m.heal} здоровья.`);
   if (m.addCards) { icons.push('🌑'); tip.push(`Подкинет в колоду ${m.addCards.n} × «${CARDS[m.addCards.id].name}».`); }
   if (m.summon) { icons.push('🦇'); tip.push('Призовёт летунов.'); }
@@ -1517,7 +1579,7 @@ function ensureEnemyEl(e, summoned = false) {
   div.dataset.unit = e.uid;
   div.dataset.act = 'target';
   div.dataset.silent = '1';
-  div.innerHTML = `<div class="intent"></div><div class="sprite">${flyerSVG(e.def.art)}</div>
+  div.innerHTML = `<div class="intent"></div><div class="sprite">${enemyArt(e.def.art)}</div>
     <div class="u-name">${e.name}</div><div class="u-bar"></div><div class="statuses"></div>`;
   // наведение на врага: урон на картах пересчитывается с учётом его статусов
   div.addEventListener('pointerenter', () => { if (cb && !e.dead) { cb.hoverTarget = e; renderHand(); } });
@@ -1525,12 +1587,25 @@ function ensureEnemyEl(e, summoned = false) {
   document.getElementById('enemies').appendChild(div);
 }
 
+function clingCloud(e) {
+  e.clinging = true;
+  fx(e.uid, 'вцепился!', 'drain', 'pulse');
+  setTimeout(() => { if (cb && !cb.over) banner('Облако вцепилось', 'danger'); }, 200);
+}
+function detachCloud(e) {
+  if (!cb || !e.clinging || e.dead) return;
+  e.clinging = false; e.turnDmg = 0;
+  e.move = 'reform'; e.hist.push('reform');
+  fx(e.uid, 'сорвано!', 'buff', 'hurt', 'burst:#b46bff');
+  updateCombat();
+}
 function updateCombat() {
   if (!cb) return;
   refreshTop();
   const p = cb.p;
   const hero = document.querySelector('[data-unit="hero"]');
   updateBar(hero.querySelector('.u-bar'), run.hp, run.maxHp, p.block);
+  hero.classList.toggle('clung', cb.enemies.some(e => e.clinging && !e.dead));
   updateStatuses(hero.querySelector('.statuses'), p.st);
   const sel = cb.selected ? cb.hand.find(c => c.uid === cb.selected) : null;
   const targeting = sel && CARDS[sel.id].target === 'enemy';
@@ -1538,6 +1613,11 @@ function updateCombat() {
     const el = document.querySelector(`[data-unit="${e.uid}"]`);
     if (!el) continue;
     el.classList.toggle('dead', e.dead);
+    if (e.clinging && !el.classList.contains('clinging')) {
+      const hs = document.querySelector('[data-unit="hero"] .sprite').getBoundingClientRect(), es = el.getBoundingClientRect();
+      el.style.setProperty('--cling-x', ((hs.right - es.left) / scale - 70) + 'px');
+    }
+    el.classList.toggle('clinging', !!e.clinging);
     el.classList.toggle('targetable', !!targeting && !e.dead);
     const ii = intentInfo(e);
     const ie = el.querySelector('.intent');
@@ -1654,6 +1734,8 @@ const combatActions = {
 // ============================================================
 //  Зелья: применение
 // ============================================================
+// Проклятие «Дрожащие руки»: 50% зелий разливается (кроме святой воды)
+const spilled = p => run.curses.includes('tremor') && !p.cleanse && Math.random() < 0.5;
 function drinkPotion(i) {
   const id = run.potions[i];
   if (!id) return;
@@ -1663,7 +1745,8 @@ function drinkPotion(i) {
     const slot = document.querySelectorAll('.tb-potions .potion-slot')[i];
     if (slot) burst(slot, p.glow, 16, 0.5);
     run.potions[i] = null;
-    p.use({ heal: n => evApi.heal(n) });
+    if (spilled(p)) { save(); refreshTop(); toast('Руки дрожат — зелье разлито впустую'); return; }
+    p.use({ heal: n => evApi.heal(n), uncurse: () => { run.curses = []; sfx('buff'); toast('Проклятия сняты'); } });
     save(); refreshTop();
     return;
   }
@@ -1689,6 +1772,7 @@ async function usePotionOn(i, target) {
   await sleep(420);
   cb.playing = false;
   if (!cb || cb.over) return;
+  if (spilled(p)) { fx('hero', 'разлито впустую 🖐️', 'debuff', 'hurt'); sfx('debuff'); updateCombat(); return; }
   burst(toEl, p.glow, 24, 0.45);
   effectAt(toEl, 'ring', 0.45, 800, `--c:${p.glow}`);
   sfx('buff');
@@ -1828,12 +1912,14 @@ function winCombat() {
   run.relics.forEach(r => RELICS[r].combatEnd && RELICS[r].combatEnd(run));
   run.fights++;
   const kind = cb.kind, bonus = cb.bonusGold || 0, turns = cb.turn;
-  const glowGain = cb.p.st.aware || 0, glowBefore = run.glow || 0;
+  const glowGain = (cb.p.st.aware || 0) * (hasRelic('shard') ? 2 : 1), glowBefore = run.glow || 0;
   run.glow = glowBefore + glowGain;
   if (kind === 'elite') run.stats.elites++;
   cb = null;
   if (kind === 'boss') return showVictory();
   const rewards = [];
+  const extra = run.room && run.room.extra;
+  if (extra) [].concat(extra).forEach(x => rewards.push({ ...x }));
   // базовая награда меньше, зато быстрая победа приносит бонус
   const elite = kind === 'elite';
   const base = (elite ? rnd(15, 20) : rnd(6, 10)) + bonus;
@@ -1843,7 +1929,7 @@ function winCombat() {
   // шанс зелья как в Slay the Spire: 40%, после неудачи +10%, после выпадения −10%
   if (Math.random() * 100 < run.potionChance) { rewards.push({ type: 'potion', id: randomPotionId() }); run.potionChance -= 10; }
   else run.potionChance += 10;
-  rewards.push({ type: 'card', ids: rewardCards(3, kind === 'elite') });
+  rewards.push({ type: 'card', ids: rewardCards(run.curses.includes('forget') ? 2 : 3, kind === 'elite') });
   run.room = { type: 'rewards', rewards, title: kind === 'elite' ? 'Элитный летун повержен!' : 'Летуны рассеяны!', glowGain, glowBefore };
   save();
   showRewards();
@@ -1869,7 +1955,8 @@ function showRewards() {
         <p class="muted">Награды</p>
         ${rewards.map((r, i) => r.taken ? '' : `<button class="reward" data-act="take" data-i="${i}">${
           r.type === 'gold' ? `💰 ${r.n} песо${r.fast ? ` <small class="muted">(${r.base} + ${r.fast} за победу за ${r.turns} ${r.turns === 1 ? 'ход' : r.turns < 5 ? 'хода' : 'ходов'})</small>` : ''}` :
-          r.type === 'relic' ? `${RELICS[r.id].icon} ${RELICS[r.id].name}` :
+          r.type === 'relic' ? `${RELICS[r.id].icon} ${RELICS[r.id].name}${RELICS[r.id].unique ? ' <small class="uniq">уникальная</small>' : ''}` :
+          r.type === 'cardFixed' ? `🂠 «${CARDS[r.id].name}» <small class="uniq">уникальная карта</small>` :
           r.type === 'potion' ? `<span class="rw-potion" style="--pc:${POTIONS[r.id].glow}">${potionSVG(r.id)}</span> ${POTIONS[r.id].name}` :
           '🂠 Добавить карту в колоду'}</button>`).join('')}
         <button class="btn big" data-act="next">${rewards.every(r => r.taken) ? 'Продолжить' : 'Пропустить остальное'} ➜</button>
@@ -1882,6 +1969,7 @@ function showRewards() {
       const r = rewards[+el.dataset.i];
       if (r.type === 'gold') { run.gold += r.n; r.taken = true; sfx('gold'); save(); render(); }
       else if (r.type === 'relic') { gainRelic(r.id); r.taken = true; sfx('buff'); save(); render(); }
+      else if (r.type === 'cardFixed') { run.deck.push(mkCard(r.id)); r.taken = true; sfx('buff'); save(); render(); }
       else if (r.type === 'potion') {
         if (!hasPotionSlot()) { toast('Нет свободной ячейки — выбросьте зелье (кликните по нему вверху)'); return; }
         r.taken = true; sfx('buff'); render(); gainPotion(r.id); save();

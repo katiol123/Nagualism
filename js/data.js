@@ -14,7 +14,7 @@ const HEROES = {
     pool: ['stalk', 'notdoing', 'folly', 'gait', 'silence', 'hunt',
            'erase', 'mescalito', 'seeing', 'recap', 'ally', 'impecc',
            'shift', 'death', 'leap',
-           'twin', 'dream', 'clarity', 'fearless', 'might'],
+           'twin', 'dream', 'clarity', 'fearless', 'might', 'discipline'],
   },
   donjuan: {
     id: 'donjuan', name: 'Дон Хуан Матус', title: 'Нагваль', playable: false,
@@ -53,7 +53,12 @@ const STATUS_INFO = {
   impecc:     { icon: '⚖️', name: 'Безупречность', tip: 'В конце хода получаете {n} Защиты.' },
   ally:       { icon: '💨', name: 'Союзник', tip: 'В конце хода наносит {n} урона случайному врагу.' },
   death:      { icon: '💀', name: 'Смерть-советчица', tip: 'В начале хода получаете {n} Личной силы.' },
-  rage:       { icon: '🔥', name: 'Ярость', tip: 'Летун в ярости: каждый свой ход, помимо обычного действия, сжирает {n} Осознания. Это не делает его сильнее, но даже Второе внимание не защищает.', debuff: true },
+  rage:       { icon: '🔥', name: 'Ярость', tip: 'Летун в ярости: каждый свой ход, помимо обычного действия, сжирает {n} Осознания. Это не делает его сильнее, но даже мастерство второго внимания не защищает.', debuff: true },
+  scout:      { icon: '🔷', name: 'Голубой лазутчик', tip: 'В начале хода возьмите ещё {n} карт.' },
+  discipline: { icon: '🧘', name: 'Дисциплина', tip: 'В начале хода Защита не сбрасывается, а уменьшается вдвое.' },
+  sapped:     { icon: '🩸', name: 'Истощение', tip: 'Облако высосало силы: в начале следующего хода −{n} энергии.', debuff: true },
+  intangible: { icon: '👻', name: 'Бесплотность', tip: 'До своего следующего хода получает вдвое меньше урона.' },
+  thorns:     { icon: '🌵', name: 'Шипы', tip: 'Каждая ваша атака по нему наносит вам {n} урона.' },
   dream:      { icon: '💤', name: 'Сновидение', tip: 'В начале следующего хода возьмёте ещё {n} карт.' },
   fearless:   { icon: '🐺', name: 'Победа над страхом', tip: 'Когда враг накладывает на вас Слабость или Уязвимость: +{n} Защиты и +1 Осознание.' },
 };
@@ -204,6 +209,45 @@ const CARDS = {
     play: (g, u, t) => g.hit(t, u ? 44 : 32),
   },
 
+  discipline: {
+    name: 'Дисциплина', type: 'power', rarity: 'uncommon', cost: u => u ? 1 : 2, art: '🧘',
+    desc: () => 'Способность. В начале хода ваша Защита не сбрасывается, а уменьшается вдвое.',
+    play: g => g.power('discipline', 1),
+  },
+
+  // ---------- уникальные: только из событий ----------
+  gorda: {
+    name: 'Урок Ла Горды', type: 'skill', rarity: 'unique', cost: u => u ? 0 : 1, target: 'enemy', art: '🧕',
+    desc: () => 'Наложить 2 Слабости и 2 Уязвимости. Получить 1 Осознание.',
+    play: (g, u, t) => { g.debuff(t, 'weak', 2); g.debuff(t, 'vulnerable', 2); g.aware(1); },
+  },
+  pablito: {
+    name: 'Прыжок Паблито', type: 'attack', rarity: 'unique', cost: 2, target: 'enemy', art: '🪑',
+    desc: (u, f) => `Нанести ${f.d(u ? 16 : 12)} урона. Получить ${f.b(u ? 10 : 8)} Защиты.`,
+    play: (g, u, t) => { g.hit(t, u ? 16 : 12); g.block(u ? 10 : 8); },
+  },
+  scout: {
+    name: 'Голубой лазутчик', type: 'power', rarity: 'unique', cost: u => u ? 0 : 1, art: '🔷',
+    desc: () => 'Способность. В начале каждого хода возьмите 1 дополнительную карту.',
+    play: g => g.power('scout', 1),
+  },
+  ixtlan: {
+    name: 'Дорога в Икстлан', type: 'skill', rarity: 'unique', cost: 0, art: '🛤️', exhaust: true,
+    desc: u => `Восстановить ${u ? 9 : 6} здоровья. Получить 2 Осознания. Сгорает.`,
+    play: (g, u) => { g.heal(u ? 9 : 6); g.aware(2); },
+  },
+  coyote: {
+    name: 'Разговор с койотом', type: 'skill', rarity: 'unique', cost: 1, art: '🐺',
+    desc: (u, f) => `Потратить всё Осознание${f.aw()}: взять столько же карт (не больше 5)${u ? ' и получить 1 энергию' : ''}.`,
+    requires: g => g.getAware() >= 1 ? null : 'Нет Осознания',
+    play: (g, u) => { const n = Math.min(5, g.getAware()); g.spendAware(); g.draw(n); if (u) g.energy(1); },
+  },
+  lecture: {
+    name: 'Лекция о летунах', type: 'skill', rarity: 'unique', cost: 1, target: 'all', art: '🎓',
+    desc: u => `Наложить ${u ? 2 : 1} Уязвимость на ВСЕХ врагов. Взять 1 карту.`,
+    play: (g, u) => { g.debuffAll('vulnerable', u ? 2 : 1); g.draw(1); },
+  },
+
   // ---------- особые ----------
   fire: {
     name: 'Огонь изнутри', type: 'attack', rarity: 'special', cost: 0, target: 'all', art: '☄️', exhaust: true,
@@ -213,6 +257,11 @@ const CARDS = {
   },
 
   // ---------- статусы ----------
+  nightmare: {
+    name: 'Кошмарный сон', type: 'status', rarity: 'special', cost: null, art: '😱',
+    unplayable: true, ethereal: true, endTurnHp: 2,
+    desc: () => 'Неиграемая. Эфирная. Если в конце хода карта в руке — потеряйте 2 здоровья.',
+  },
   mind: {
     name: 'Разум летуна', type: 'status', rarity: 'special', cost: null, art: '🌑',
     unplayable: true, ethereal: true,
@@ -221,7 +270,7 @@ const CARDS = {
 };
 
 const TYPE_NAMES = { attack: 'Атака', skill: 'Навык', power: 'Способность', status: 'Статус' };
-const RARITY_NAMES = { basic: 'Базовая', common: 'Обычная', uncommon: 'Необычная', rare: 'Редкая', special: 'Особая' };
+const RARITY_NAMES = { basic: 'Базовая', common: 'Обычная', uncommon: 'Необычная', rare: 'Редкая', special: 'Особая', unique: 'Уникальная' };
 
 // ============================================================
 //  Реликвии
@@ -312,6 +361,35 @@ const RELICS = {
     name: 'Циновка сновидящего', icon: '🧶',
     desc: 'Открывает Созерцание на местах силы: можно отрешиться от карты или навсегда усилить Осознание.',
   },
+  // ---------- уникальные: только из событий ----------
+  tenant: {
+    name: 'Дар Арендатора', icon: '🗝️', unique: true,
+    desc: 'В начале каждого боя получите 3 Осознания.',
+    combatStart: g => g.aware(3),
+  },
+  scarf: {
+    name: 'Платок сестричек', icon: '🎀', unique: true,
+    desc: 'Первая атака в каждом ходу наносит +4 урона.',
+  },
+  mask: {
+    name: 'Маска нагваля Хулиана', icon: '🎭', unique: true,
+    desc: 'В начале каждого боя случайный летун получает 2 Слабости и 1 Уязвимость.',
+    combatStart: g => g.debuffRandom(),
+  },
+  crow: {
+    name: 'Глаза вороны', icon: '🌘', unique: true,
+    desc: 'В начале каждого боя наложите 1 Слабость на всех врагов.',
+    combatStart: g => g.debuffAll('weak', 1),
+  },
+  shard: {
+    name: 'Осколок неорганического', icon: '🧿', unique: true,
+    desc: 'Непотраченное Осознание после победы даёт вдвое больше Свечения кокона.',
+  },
+  fang: {
+    name: 'Клык дьяблеро', icon: '🦷', unique: true,
+    desc: 'После каждой победы: +1 к максимальному здоровью и 4 здоровья.',
+    combatEnd: r => { r.maxHp += 1; r.hp = Math.min(r.maxHp, r.hp + 4); },
+  },
 };
 const RELIC_POOL = ['necklace', 'crystals', 'feather', 'peyote', 'pipe', 'lizards', 'gourd',
   'pouch', 'hat', 'scorpion', 'pencil', 'mirror', 'poncho', 'jug', 'tobacco', 'stone', 'mat'];
@@ -345,6 +423,16 @@ const POTIONS = {
     desc: 'Восстановить 20 здоровья. Можно выпить и вне боя.',
     use: g => g.heal(20),
   },
+  awaken: {
+    name: 'Эликсир пробуждения', color: '#ff9a3c', glow: '#ffd08a', rarity: 'common',
+    desc: 'Сжечь все неиграемые карты в руке и взять столько же карт из колоды.',
+    use: g => g.burnUnplayable(),
+  },
+  holy: {
+    name: 'Святая вода курандеры', color: '#cfe8ff', glow: '#ffffff', rarity: 'uncommon', anytime: true, cleanse: true,
+    desc: 'Снять все проклятия. Можно выпить и вне боя. Дрожь в руках на неё не действует.',
+    use: g => g.uncurse(),
+  },
   eagle: {
     name: 'Слеза орла', color: '#ffc23a', glow: '#fff0a8', rarity: 'rare',
     desc: 'Получить 4 Осознания.',
@@ -357,8 +445,16 @@ const POTION_SLOTS = 3;
 //  Свечение кокона: непотраченное Осознание после победы копится через весь забег
 // ============================================================
 const GLOW_TIERS = [
-  { at: 10, name: 'Первое внимание', desc: '+1 Осознание в начале каждого боя.' },
-  { at: 20, name: 'Второе внимание', desc: 'Ваша энергия становится летунам невкусной — они перестают пожирать Осознание.' },
-  { at: 30, name: 'Третье внимание', desc: 'Каждый бой начинается с картой «Огонь изнутри» в руке.' },
+  { at: 10, name: 'Мастер первого внимания', desc: '+1 Осознание в начале каждого боя.' },
+  { at: 20, name: 'Мастер второго внимания', desc: 'Ваша энергия становится летунам невкусной — они перестают пожирать Осознание.' },
+  { at: 30, name: 'Мастер третьего внимания', desc: 'Каждый бой начинается с картой «Огонь изнутри» в руке.' },
 ];
 const GLOW_MAX = 30;
+
+// ============================================================
+//  Проклятия — постоянные, до конца забега или до «Святой воды курандеры»
+// ============================================================
+const CURSES = {
+  forget: { name: 'Проклятие забвения', icon: '🕸️', desc: 'После боя на выбор предлагается на 1 карту меньше.' },
+  tremor: { name: 'Дрожащие руки', icon: '🖐️', desc: 'Каждое выпитое зелье с шансом 50% разливается впустую.' },
+};
