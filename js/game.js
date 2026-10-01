@@ -1354,7 +1354,8 @@ function damagePlayer(d) {
   p.block -= blocked;
   const rest = d - blocked;
   run.hp = Math.max(0, run.hp - rest);
-  fx('hero', rest > 0 ? `-${rest}` : 'Блок', rest > 0 ? 'dmg' : 'blk', 'hurt', rest >= 8 ? 'shake' : rest > 0 ? 'slash' : 'ring:#8fc8ff');
+  fx('hero', rest > 0 ? `-${rest}` : 'Блок', rest > 0 ? 'dmg' : 'blk', rest > 0 ? 'hurt' : 'parry', rest >= 8 ? 'shake' : rest > 0 ? 'slash' : 'ring:#8fc8ff');
+  if (blocked > 0 && p.block === 0 && rest > 0) guardBreak();
   sfx(rest > 0 ? 'hurt' : 'block');
   if (hasRelic('hat') && !cb.hatUsed && run.hp > 0 && run.hp < run.maxHp / 2) { cb.hatUsed = true; G.block(12); fx('hero', '👒 Шляпа Хенаро', 'buff'); }
 }
@@ -1579,7 +1580,7 @@ async function playCard(uid, target) {
   await sleep(mode === 'attack' ? 190 : 150);
   cb.playing = false;
   if (!cb || cb.over) return;
-  if (d.type === 'attack') fx('hero', '', '', 'lunge');
+  if (d.type === 'attack') { fx('hero', '', '', 'lunge'); heroAttack(); }
   if (['double', 'fire', 'shift', 'might'].includes(c.id)) sound('mystic');
   d.play(G, c.up, target);
   delete c.tmpCost;
@@ -1784,7 +1785,9 @@ function renderCombatShell() {
     ${motes(14, 'embers')}<div class="fog"></div>
     <div class="field">
       <div class="unit hero" data-unit="hero">
-        <div class="sprite" style="--spr:url('${new URL(h.side || h.body, location.href).href}')"><img src="${h.side || h.body}" alt=""></div>
+        <div class="sprite" style="--spr:url('${new URL(h.side || h.body, location.href).href}')">${h.poses
+          ? Object.entries(h.poses).map(([k, v]) => `<img class="pose p-${k}" data-pose="${k}" data-anchor="${v.anchor}" src="${v.src}" alt="">`).join('')
+          : `<img src="${h.side || h.body}" alt="">`}</div>
         <div class="u-bar"></div><div class="statuses"></div>
         <div class="incoming" id="incoming"></div>
       </div>
@@ -1803,6 +1806,8 @@ function renderCombatShell() {
     </div>
   </div>`;
   cb.enemies.forEach(e => ensureEnemyEl(e));
+  document.querySelectorAll('[data-unit="hero"] .pose').forEach(img => img.complete ? placePoses() : img.addEventListener('load', placePoses));
+  placePoses();
 }
 function ensureEnemyEl(e, summoned = false) {
   if (document.querySelector(`[data-unit="${e.uid}"]`)) return;
@@ -1832,12 +1837,55 @@ function detachCloud(e) {
   fx(e.uid, 'сорвано!', 'buff', 'hurt', 'burst:#b46bff');
   updateCombat();
 }
+// ---- стойки героя: выпад при атаке, защитная стойка пока есть Защита ----
+function placePoses() {
+  const sp = document.querySelector('[data-unit="hero"] .sprite');
+  if (!sp) return;
+  const idle = sp.querySelector('.p-idle');
+  if (!idle || !idle.naturalWidth) return;
+  const k = idle.offsetHeight / idle.naturalHeight;
+  const cx = idle.naturalWidth * k * +idle.dataset.anchor;
+  sp.querySelectorAll('.pose:not(.p-idle)').forEach(img => {
+    if (!img.naturalWidth) return;
+    img.style.height = Math.round(img.naturalHeight * k) + 'px';
+    img.style.left = Math.round(cx - img.naturalWidth * k * +img.dataset.anchor) + 'px';
+  });
+}
+function heroPose() {
+  const hero = document.querySelector('[data-unit="hero"]');
+  if (!hero || !cb || !HEROES[run.hero].poses) return;
+  const pose = performance.now() < (cb.attackUntil || 0) ? 'attack' : cb.p.block > 0 && !cb.over ? 'guard' : 'idle';
+  if (hero.dataset.pose === pose) return;
+  hero.dataset.pose = pose;
+  ['idle', 'guard', 'attack'].forEach(k => hero.classList.toggle('pose-' + k, k === pose));
+  const src = HEROES[run.hero].poses[pose].src;
+  hero.querySelector('.sprite').style.setProperty('--spr', `url('${new URL(src, location.href).href}')`);
+}
+function heroAttack() {
+  if (!cb || !HEROES[run.hero].poses) return;
+  cb.attackUntil = performance.now() + 460 / speedMul;
+  heroPose();
+  // шлейф выпада: два полупрозрачных отражения позади
+  const sp = document.querySelector('[data-unit="hero"] .sprite'), src = sp && sp.querySelector('.p-attack');
+  if (src) [1, 2].forEach(i => {
+    const g = src.cloneNode(); g.className = 'pose trail t' + i; sp.appendChild(g);
+    setTimeout(() => g.remove(), 450);
+  });
+  setTimeout(() => { if (cb) heroPose(); }, 470 / speedMul);
+}
+function guardBreak() {
+  const sp = document.querySelector('[data-unit="hero"] .sprite');
+  if (!sp) return;
+  burst(sp, '#8fc8ff', 22, 0.4);
+  fx('hero', 'Защита пробита', 'info');
+}
 function updateCombat() {
   if (!cb) return;
   refreshTop();
   const p = cb.p;
   const hero = document.querySelector('[data-unit="hero"]');
   updateBar(hero.querySelector('.u-bar'), run.hp, run.maxHp, p.block);
+  heroPose();
   hero.classList.toggle('clung', cb.enemies.some(e => e.clinging && !e.dead));
   // сколько урона придёт в ход врагов (с учётом их Силы, Слабости и вашей Уязвимости)
   const inc = document.getElementById('incoming');

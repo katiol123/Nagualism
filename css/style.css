@@ -739,3 +739,22 @@ html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparen
   color: #1f1206; font-weight: 700; font-size: 17px; transition: background .15s, border-color .15s; }
 .opt-check .box.on { background: linear-gradient(#f2cf86, #c99545); border-color: #fff0c2; box-shadow: 0 0 10px rgba(255, 200, 100, .5); }
 .opt-check:hover .box { border-color: var(--gold); }
+
+/* ---------- стойки Карлоса ---------- */
+.unit.hero .sprite .pose { transition: opacity .12s ease; }
+.unit.hero .sprite .pose:not(.p-idle) { position: absolute; bottom: 0; opacity: 0; pointer-events: none; }
+.unit.hero.pose-guard .sprite .pose.p-idle, .unit.hero.pose-attack .sprite .pose.p-idle { opacity: 0; }
+.unit.hero.pose-guard .sprite .pose.p-guard, .unit.hero.pose-attack .sprite .pose.p-attack { opacity: 1; }
+.unit.hero.pose-guard .sprite .pose.p-guard { filter: drop-shadow(0 8px 12px #000c) drop-shadow(0 0 14px rgba(120, 190, 255, .55)); animation: guard-in .25s ease-out, guard-breathe 2.6s ease-in-out .25s infinite; transform-origin: 50% 100%; }
+@keyframes guard-in { from { transform: translateY(6px) scale(.97); } }
+@keyframes guard-breathe { 50% { transform: scaleY(1.01) translateY(-1px); } }
+.unit.hero.pose-attack .sprite .pose.p-attack { filter: drop-shadow(0 8px 12px #000c) drop-shadow(0 0 12px rgba(255, 200, 120, .45)); }
+.unit.hero .sprite .trail { opacity: 0; filter: blur(1px) brightness(1.4) sepia(1) hue-rotate(-20deg); animation: trail .42s ease-out forwards; }
+.unit.hero .sprite .trail.t1 { animation-delay: .03s; --tx: -26px; }
+.unit.hero .sprite .trail.t2 { animation-delay: .07s; --tx: -52px; }
+@keyframes trail { 0% { opacity: .45; transform: translateX(var(--tx)); } 100% { opacity: 0; transform: translateX(calc(var(--tx) - 30px)); } }
+.unit.hero.lunge .sprite { animation: lunge-pose .46s cubic-bezier(.2, .8, .3, 1); }
+@keyframes lunge-pose { 0% { transform: translateX(0); } 30% { transform: translateX(90px); } 60% { transform: translateX(80px); } 100% { transform: translateX(0); } }
+/* полностью заблокированный удар: парирование вместо покраснения */
+.unit.hero.parry .sprite { animation: parry .3s ease-out; }
+@keyframes parry { 30% { transform: translateX(-5px); filter: brightness(1.4) drop-shadow(0 0 20px #8fc8ff); } }
