@@ -1260,7 +1260,13 @@ function flushFx() {
   for (const f of fxq) {
     const el = document.querySelector(`[data-unit="${f.unit}"]`);
     if (!el) continue;
-    if (f.anim) { el.classList.remove(f.anim); void el.offsetWidth; el.classList.add(f.anim); }
+    if (f.anim) {
+      // одновременно на юните висит только одна такая анимация, и класс снимается после неё —
+      // иначе оставшийся класс (например, «парирование») навсегда перебивает следующие
+      const ANIMS = ['hurt', 'parry', 'lunge', 'attack', 'pulse'];
+      el.classList.remove(...ANIMS); void el.offsetWidth; el.classList.add(f.anim);
+      clearTimeout(el._animT); el._animT = setTimeout(() => el.classList.remove(f.anim), 900);
+    }
     if (f.extra) runExtra(el, f.extra);
     if (!f.text) continue;
     const q = floatQ[f.unit] = floatQ[f.unit] || { next: 0, slot: 0, last: 0 };
@@ -1580,7 +1586,7 @@ async function playCard(uid, target) {
   await sleep(mode === 'attack' ? 190 : 150);
   cb.playing = false;
   if (!cb || cb.over) return;
-  if (d.type === 'attack') { fx('hero', '', '', 'lunge'); heroAttack(); }
+  if (d.type === 'attack') { if (HEROES[run.hero].poses) heroAttack(); else fx('hero', '', '', 'lunge'); }
   if (['double', 'fire', 'shift', 'might'].includes(c.id)) sound('mystic');
   d.play(G, c.up, target);
   delete c.tmpCost;
@@ -1861,17 +1867,32 @@ function heroPose() {
   const src = HEROES[run.hero].poses[pose].src;
   hero.querySelector('.sprite').style.setProperty('--spr', `url('${new URL(src, location.href).href}')`);
 }
+// Выпад: смена позы и рывок — одна анимация с общим таймингом (с учётом скорости боя).
+// Обратно в стойку Карлос переходит только когда рывок закончился и он вернулся на место.
 function heroAttack() {
   if (!cb || !HEROES[run.hero].poses) return;
-  cb.attackUntil = performance.now() + 460 / speedMul;
+  const sp = document.querySelector('[data-unit="hero"] .sprite');
+  if (!sp) return;
+  const D = 460 / speedMul;
+  if (cb.lungeAnim) cb.lungeAnim.cancel();
+  sp.querySelectorAll('.trail').forEach(t => t.remove());
+  cb.attackUntil = Infinity;
   heroPose();
-  // шлейф выпада: два полупрозрачных отражения позади
-  const sp = document.querySelector('[data-unit="hero"] .sprite'), src = sp && sp.querySelector('.p-attack');
+  const anim = sp.animate([
+    { transform: 'translateX(0)' },
+    { transform: 'translateX(90px)', offset: 0.3, easing: 'ease-in-out' },
+    { transform: 'translateX(80px)', offset: 0.6, easing: 'ease-in' },
+    { transform: 'translateX(0)' },
+  ], { duration: D, easing: 'cubic-bezier(.25,.6,.35,1)' });
+  cb.lungeAnim = anim;
+  anim.onfinish = () => { if (cb && cb.lungeAnim === anim) { cb.lungeAnim = null; cb.attackUntil = 0; heroPose(); } };
+  // шлейф: два полупрозрачных отражения позади
+  const src = sp.querySelector('.p-attack');
   if (src) [1, 2].forEach(i => {
     const g = src.cloneNode(); g.className = 'pose trail t' + i; sp.appendChild(g);
-    setTimeout(() => g.remove(), 450);
+    g.animate([{ opacity: .45, transform: `translateX(${-26 * i}px)` }, { opacity: 0, transform: `translateX(${-26 * i - 30}px)` }],
+      { duration: D * 0.9, delay: 30 * i / speedMul, fill: 'both', easing: 'ease-out' }).onfinish = () => g.remove();
   });
-  setTimeout(() => { if (cb) heroPose(); }, 470 / speedMul);
 }
 function guardBreak() {
   const sp = document.querySelector('[data-unit="hero"] .sprite');
