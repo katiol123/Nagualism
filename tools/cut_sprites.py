@@ -16,8 +16,8 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 OUT = os.path.join(ROOT, 'assets', 'heroes')
 
 # имя: (лист, кроп фигуры в полный рост, кроп портрета)
-# Кастанеда больше не вырезается из листа: его спрайты (вид спереди и сбоку) сделаны из
-# фото в высоком качестве — assets/heroes/source/carlos_front.png и carlos_side.png.
+# Кастанеда больше не вырезается из листа: его спрайты (анфас и профиль) готовит
+# tools/prepare_castaneda.py из фото assets/heroes/source/castaneda_front.png и castaneda_side.png.
 # Портрет castaneda_portrait.jpg остаётся из листа (там крупный план лица).
 JOBS = {
     'donjuan': ('don_juan_model_sheet_1-edited.jpg', (800, 640, 1120, 1225), (30, 20, 630, 580)),
