@@ -73,8 +73,22 @@ const motes = (n = 16, cls = '') => `<div class="motes ${cls}">${Array.from({ le
 //  Звук (синтез, без файлов)
 // ============================================================
 let actx = null, muted = localStorage.getItem('nagual_mute') === '1';
+// Записанные звуки (assets/audio/sfx). Каждый вызов — своя копия, чтобы звуки не обрывали друг друга.
+const SAMPLE_VOL = { rage: .9, braam: .85, welcome: .6, mystic: .7, laugh: .8, psy_long: .7, horn: .7 };
+const samples = {};
+Object.keys(SAMPLE_VOL).forEach(k => { const a = new Audio(`assets/audio/sfx/${k}.mp3`); a.preload = 'auto'; samples[k] = a; });
+const sampleLast = {};
+function sound(name) {
+  if (muted || !samples[name]) return;
+  const now = performance.now();
+  if (now - (sampleLast[name] || 0) < 250) return;   // не накладываем одинаковые звуки
+  sampleLast[name] = now;
+  const a = samples[name].cloneNode();
+  a.volume = Math.min(1, SAMPLE_VOL[name] * volSfx);
+  a.play().catch(() => {});
+}
 function sfx(kind) {
-  if (muted) return;
+  if (muted || volSfx <= 0) return;
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
     const t = actx.currentTime;
@@ -82,14 +96,14 @@ function sfx(kind) {
       const o = actx.createOscillator(), g = actx.createGain();
       o.type = type; o.frequency.setValueAtTime(f1, t + delay);
       o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + delay + dur);
-      g.gain.setValueAtTime(vol, t + delay); g.gain.exponentialRampToValueAtTime(0.001, t + delay + dur);
+      g.gain.setValueAtTime(vol * volSfx, t + delay); g.gain.exponentialRampToValueAtTime(0.001, t + delay + dur);
       o.connect(g).connect(actx.destination); o.start(t + delay); o.stop(t + delay + dur);
     };
     const noise = (dur, vol = 0.2, freq = 1200) => {
       const b = actx.createBuffer(1, actx.sampleRate * dur, actx.sampleRate), d = b.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
       const s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
-      f.type = 'bandpass'; f.frequency.value = freq; g.gain.value = vol;
+      f.type = 'bandpass'; f.frequency.value = freq; g.gain.value = vol * volSfx;
       s.buffer = b; s.connect(f).connect(g).connect(actx.destination); s.start(t);
     };
     switch (kind) {
@@ -114,10 +128,7 @@ function sfx(kind) {
 // ============================================================
 //  Подсказки
 // ============================================================
-document.addEventListener('mouseover', e => {
-  if (typeof drag !== 'undefined' && drag && drag.active) { tooltip.style.display = 'none'; return; }
-  const el = e.target.closest('[data-tip]');
-  if (!el || !el.dataset.tip) { tooltip.style.display = 'none'; return; }
+function showTip(el) {
   tooltip.innerHTML = el.dataset.tip;
   tooltip.style.display = 'block';
   const r = el.getBoundingClientRect();
@@ -128,8 +139,41 @@ document.addEventListener('mouseover', e => {
   if (y + th > window.innerHeight - 4) y = window.innerHeight - th - 4;
   if (y < 4) y = 4;
   tooltip.style.left = x + 'px'; tooltip.style.top = y + 'px';
+}
+let lastTouch = 0;
+document.addEventListener('mouseover', e => {
+  if (performance.now() - lastTouch < 800) return;          // на тач-экране подсказки — по долгому нажатию
+  if (typeof drag !== 'undefined' && drag && drag.active) { tooltip.style.display = 'none'; return; }
+  const el = e.target.closest('[data-tip]');
+  if (!el || !el.dataset.tip) { tooltip.style.display = 'none'; return; }
+  showTip(el);
 });
-document.addEventListener('mousedown', () => { tooltip.style.display = 'none'; });
+document.addEventListener('mousedown', () => { if (performance.now() - lastTouch > 800) tooltip.style.display = 'none'; });
+
+// Тач-экраны: долгое нажатие (0,45 с) показывает подсказку, короткое — обычный клик
+let lpTimer = null, lpShown = false, lpStart = null;
+document.addEventListener('touchstart', e => {
+  lastTouch = performance.now();
+  tooltip.style.display = 'none';
+  lpShown = false;
+  const el = e.target.closest('[data-tip]');
+  clearTimeout(lpTimer);
+  if (!el || !el.dataset.tip) return;
+  const t = e.touches[0]; lpStart = { x: t.clientX, y: t.clientY };
+  lpTimer = setTimeout(() => {
+    if (typeof drag !== 'undefined' && drag && drag.active) return;
+    lpShown = true; showTip(el);
+    if (navigator.vibrate) navigator.vibrate(12);
+  }, 450);
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  const t = e.touches[0];
+  if (lpStart && Math.hypot(t.clientX - lpStart.x, t.clientY - lpStart.y) > 10) clearTimeout(lpTimer);
+}, { passive: true });
+document.addEventListener('touchend', () => { clearTimeout(lpTimer); lastTouch = performance.now(); }, { passive: true });
+// после долгого нажатия не срабатывает клик по элементу
+document.addEventListener('click', e => { if (lpShown) { lpShown = false; e.stopPropagation(); e.preventDefault(); } }, true);
+document.addEventListener('contextmenu', e => { if (performance.now() - lastTouch < 1000) e.preventDefault(); });
 
 // ============================================================
 //  Клики: data-act="имя" → actions[имя](el, ev)
@@ -140,6 +184,8 @@ const globalActions = {
   sound: el => { muted = !muted; localStorage.setItem('nagual_mute', muted ? '1' : '0'); el.classList.toggle('off', muted); refreshTop(); },
   music: el => { Music.toggle(); el.classList.toggle('off', musicMuted); refreshTop(); },
   menu: () => showMenu(),
+  settings: () => showSettings(),
+  fullscreen: () => toggleFullscreen(),
   potion: el => openPotionPop(+el.dataset.i),
   drinkPotion: el => { closePotionPop(); drinkPotion(+el.dataset.i); },
   dropPotion: el => {
@@ -310,6 +356,7 @@ function topBar() {
     <button class="tb-btn" data-act="deck" data-tip="Посмотреть колоду">🂠 <b>${run.deck.length}</b></button>
     <button class="tb-btn ${musicMuted ? 'off' : ''}" data-act="music" data-tip="Музыка">🎵</button>
     <button class="tb-btn ${muted ? 'off' : ''}" data-act="sound" data-tip="Звуки">🔊</button>
+    <button class="tb-btn" data-act="settings" data-tip="Настройки">⚙️</button>
     <button class="tb-btn" data-act="menu" data-tip="Меню">☰</button>
   </div>`;
 }
@@ -382,6 +429,7 @@ function showMenu() {
     <div class="col">
       <button class="btn" data-act="menuResume">Продолжить</button>
       <button class="btn ghost" data-act="menuHelp">Как играть</button>
+      <button class="btn ghost" data-act="menuSettings">Настройки</button>
       <button class="btn ghost" data-act="menuQuit">Выйти в главное меню</button>
       <button class="btn danger" data-act="menuAbandon">Сдаться (прохождение будет потеряно)</button>
     </div>`);
@@ -389,9 +437,52 @@ function showMenu() {
     ...prevActions,
     menuResume: () => { closeOverlay(); actions = prevActions; },
     menuHelp: () => { actions = prevActions; showHelp(); },
+    menuSettings: () => { actions = prevActions; showSettings(); },
     menuQuit: () => { closeOverlay(); cb = null; showTitle(); },
     menuAbandon: () => { closeOverlay(); cb = null; clearSave(); run = null; showTitle(); },
   };
+}
+
+// ============================================================
+//  Настройки и полноэкранный режим
+// ============================================================
+const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+function toggleFullscreen() {
+  const d = document.documentElement;
+  try {
+    if (isFullscreen()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else (d.requestFullscreen || d.webkitRequestFullscreen).call(d);
+  } catch (e) { toast('Полноэкранный режим недоступен'); }
+}
+document.addEventListener('fullscreenchange', () => { setTimeout(fitStage, 50); const b = document.querySelector('[data-act=fullscreen].set-fs'); if (b) b.textContent = isFullscreen() ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'; });
+function showSettings() {
+  const row = (id, label, val) => `<div class="set-row"><span>${label}</span>
+    <input type="range" min="0" max="100" step="5" value="${Math.round(val * 100)}" id="${id}"><b id="${id}V">${Math.round(val * 100)}%</b></div>`;
+  openOverlay(`<h2>Настройки</h2>
+    <div class="settings">
+      ${row('setMusic', '🎵 Музыка', volMusic)}
+      ${row('setSfx', '🔊 Звуки', volSfx)}
+      <div class="set-row"><span>⏩ Скорость боя</span><div class="seg">${[1, 2, 3].map(v => `<button class="${speedMul === v ? 'on' : ''}" data-act="setSpeed" data-v="${v}">×${v}</button>`).join('')}</div></div>
+      <button class="btn ghost set-fs" data-act="fullscreen">${isFullscreen() ? 'Выйти из полноэкранного режима' : 'Полноэкранный режим'}</button>
+      <p class="muted small">На телефоне и планшете: долгое нажатие на карту, реликвию, статус или намерение врага показывает подсказку.</p>
+    </div>
+    <button class="btn" data-act="closeOverlay">Готово</button>`);
+  const bind = (id, fn) => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => { const v = el.value / 100; document.getElementById(id + 'V').textContent = el.value + '%'; fn(v); });
+  };
+  bind('setMusic', v => {
+    Music.setVolume(v);
+    if (v > 0 && musicMuted) { Music.toggle(); refreshTop(); }
+  });
+  bind('setSfx', v => { volSfx = v; localStorage.setItem('nagual_vol_sfx', v); });
+  document.getElementById('setSfx').addEventListener('change', () => { if (muted && volSfx > 0) { muted = false; localStorage.setItem('nagual_mute', '0'); refreshTop(); } sfx('click'); sound('mystic'); });
+  const prev = actions;
+  actions = { ...prev, setSpeed: el => {
+    speedMul = +el.dataset.v; localStorage.setItem('nagual_speed', speedMul); stage.style.setProperty('--spd', speedMul);
+    document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', +b.dataset.v === speedMul));
+    const sb = document.querySelector('.speed-btn'); if (sb) sb.textContent = `⏩ ×${speedMul}`;
+  }, closeOverlay: () => { closeOverlay(); actions = prev; } };
 }
 
 function showHelp() {
@@ -456,6 +547,7 @@ function showTitle(fromIntro = false) {
     <div class="t-audio">
       <button class="tb-btn ${musicMuted ? 'off' : ''}" data-act="music" data-tip="Музыка">🎵</button>
       <button class="tb-btn ${muted ? 'off' : ''}" data-act="sound" data-tip="Звуки">🔊</button>
+      <button class="tb-btn" data-act="settings" data-tip="Настройки">⚙️</button>
     </div>
   </div>`;
 }
@@ -643,6 +735,7 @@ function runEvent(ev) {
     },
   };
   beginSwap('zoom');
+  sound('welcome');
   app.innerHTML = sceneHTML(ev.art, ev.title, ev.text, `<div class="options">${opts.map((o, i) => {
     const ok = !o.can || o.can();
     return `<button class="opt ${ok ? '' : 'disabled'}" data-act="opt" data-i="${i}"><b>[${o.label}]</b> <span>${o.sub}</span></button>`;
@@ -885,6 +978,7 @@ function showRest(inPlace = false) {
   const restText = 'Ты нашёл место, где земля отдаёт силу. Летуны не решаются приблизиться к огню.';
   if (inPlace) return sceneUpdate('🔥', 'Место силы', restText, restBody);
   beginSwap('zoom');
+  sound('welcome');
   app.innerHTML = sceneHTML('🔥', 'Место силы', restText, restBody);
 }
 
@@ -909,6 +1003,7 @@ function showTreasure() {
     },
   };
   beginSwap('zoom');
+  sound('welcome');
   app.innerHTML = sceneHTML('🧰', 'Сундук', 'Среди камней стоит старый окованный сундук. Похоже, кто-то спрятал его от летунов.',
     `<div class="options"><button class="opt" data-act="open"><b>[Открыть]</b></button></div>`);
 }
@@ -940,7 +1035,7 @@ function showShop() {
 
   let first = true;
   const render = () => {
-    if (first) { beginSwap('zoom'); first = false; }
+    if (first) { beginSwap('zoom'); sound('welcome'); first = false; }
     app.innerHTML = `${topBar()}<div class="screen shop-screen">
       <div class="sky night"></div>${motes(12)}
       <div class="shop-keeper"><div class="sk-art">🧙‍♂️</div><p>«Всё, что нужно воину, — здесь. Только не торгуйся, это неблагородно»</p>${hasRelic('tobacco') ? '<p class="muted small">🍂 Скидка 25% за табак</p>' : ''}</div>
@@ -1216,6 +1311,7 @@ function damageEnemy(e, d) {
     e.phase2 = true; e.p2turn = 0;
     e.move = 'rebirth'; e.hist.push('rebirth');
     fx(e.uid, 'пробуждается!', 'drain', 'pulse', 'burst:#ff3030');
+    sound('braam'); setTimeout(() => sound('laugh'), 700);
     const el = document.querySelector(`[data-unit="${e.uid}"]`);
     if (el) el.classList.add('phase2');
     setTimeout(() => { if (cb && !cb.over) banner('Истинный облик', 'danger'); }, 250);
@@ -1242,6 +1338,7 @@ function checkReaction() {
     e.move = r; e.hist[e.hist.length - 1] = r;
     cb.reacted = true;
     fx(e.uid, 'почуял осознание!', 'drain', 'pulse');
+    sound('horn');
     sfx('drain');
     return;
   }
@@ -1387,6 +1484,7 @@ function startCombat(kind, list = null, bonusGold = 0) {
   cb.reacted = true;          // до первого хода игрока летуны не реагируют
   cb.enemies.forEach(chooseIntent);
   updateCombat();
+  if (kind === 'boss' || kind === 'elite' || cb.enemies.some(e => e.def.unique)) setTimeout(() => sound('braam'), 250);
   setTimeout(() => startTurn(), 900);
 }
 
@@ -1415,6 +1513,7 @@ function startTurn() {
   if (cb.turn === cb.rageTurn && !cb.raged) {
     cb.raged = true;
     alive().forEach(e => { addSt(e.st, 'rage', 2); fx(e.uid, '🔥 Ярость', 'debuff', 'pulse'); });
+    sound('rage');
     setTimeout(() => { if (cb && !cb.over) banner('Летуны в ярости', 'danger'); }, 900);
   }
   run.relics.forEach(r => RELICS[r].turnStart && RELICS[r].turnStart(G, cb.turn));
@@ -1451,6 +1550,7 @@ async function playCard(uid, target) {
   cb.playing = false;
   if (!cb || cb.over) return;
   if (d.type === 'attack') fx('hero', '', '', 'lunge');
+  if (['double', 'fire', 'shift', 'might'].includes(c.id)) sound('mystic');
   d.play(G, c.up, target);
   delete c.tmpCost;
   if (cb.p.st.echo && c.id !== 'double' && !d.exhaust && !cb.over) {
@@ -1506,7 +1606,7 @@ async function endTurn() {
 
   // ход врагов
   const frozen = cb.stopWorld; cb.stopWorld = false;
-  if (frozen) { banner('Мир остановлен', 'win'); await sleep(900); }
+  if (frozen) { sound('psy_long'); banner('Мир остановлен', 'win'); await sleep(900); }
   else for (const e of alive()) e.block = 0;
   updateCombat();
   for (const e of [...cb.enemies]) {
@@ -1551,6 +1651,7 @@ async function doEnemyMove(e) {
   // проклятие ложится, если удар пробил Защиту
   if (m.curse && run.hp < hp0 && !run.curses.includes(m.curse)) {
     run.curses.push(m.curse); cb.cursedNow = m.curse;
+    sound('laugh');
     fx('hero', `${CURSES[m.curse].icon} ${CURSES[m.curse].name}`, 'drain', 'hurt', 'ring:#9a4cff');
     sfx('drain');
     setTimeout(() => { if (cb && !cb.over) banner(CURSES[m.curse].name, 'danger'); }, 300);
@@ -1586,6 +1687,7 @@ async function doEnemyMove(e) {
     fx('hero', `+${m.addCards.n} 🌑 ${CARDS[m.addCards.id].name}`, 'debuff');
   }
   if (m.summon) {
+    sound('horn');
     const room = 4 - alive().length;
     m.summon.slice(0, Math.max(0, room)).forEach(id => {
       const ne = mkEnemy(id);
@@ -1654,6 +1756,7 @@ function renderCombatShell() {
       <div class="unit hero" data-unit="hero">
         <div class="sprite" style="--spr:url('${new URL(h.side || h.body, location.href).href}')"><img src="${h.side || h.body}" alt=""></div>
         <div class="u-bar"></div><div class="statuses"></div>
+        <div class="incoming" id="incoming"></div>
       </div>
       <div class="enemies" id="enemies"></div>
     </div>
@@ -1689,6 +1792,7 @@ function ensureEnemyEl(e, summoned = false) {
 function clingCloud(e) {
   e.clinging = true;
   fx(e.uid, 'вцепился!', 'drain', 'pulse');
+  sound('laugh');
   setTimeout(() => { if (cb && !cb.over) banner('Облако вцепилось', 'danger'); }, 200);
 }
 function detachCloud(e) {
@@ -1705,6 +1809,14 @@ function updateCombat() {
   const hero = document.querySelector('[data-unit="hero"]');
   updateBar(hero.querySelector('.u-bar'), run.hp, run.maxHp, p.block);
   hero.classList.toggle('clung', cb.enemies.some(e => e.clinging && !e.dead));
+  // сколько урона придёт в ход врагов (с учётом их Силы, Слабости и вашей Уязвимости)
+  const inc = document.getElementById('incoming');
+  let total = 0;
+  if (!cb.busy && !cb.over && !cb.stopWorld) for (const e of alive()) { const m = e.def.moves[e.move]; if (m && m.dmg) total += enemyDmg(e, m.dmg) * (m.times || 1); }
+  const through = Math.max(0, total - p.block);
+  inc.className = 'incoming ' + (total ? (through ? (through >= run.hp ? 'lethal' : 'hurts') : 'safe') : '');
+  inc.innerHTML = total ? `🗡️ ${total}${p.block ? ` <span>→ пройдёт ${through}</span>` : ''}${through >= run.hp ? ' <span>☠</span>' : ''}` : '';
+  inc.dataset.tip = total ? `<b>Урон в ход врагов: ${total}</b><br>Ваша Защита: ${p.block}. Пройдёт по здоровью: <b>${through}</b>${through >= run.hp ? '<br><b>Этого хватит, чтобы убить вас!</b>' : ''}` : '';
   updateStatuses(hero.querySelector('.statuses'), p.st);
   const sel = cb.selected ? cb.hand.find(c => c.uid === cb.selected) : null;
   const targeting = sel && CARDS[sel.id].target === 'enemy';
@@ -1874,7 +1986,7 @@ async function usePotionOn(i, target) {
   if (spilled(p)) { fx('hero', 'разлито впустую 🖐️', 'debuff', 'hurt'); sfx('debuff'); updateCombat(); return; }
   burst(toEl, p.glow, 24, 0.45);
   effectAt(toEl, 'ring', 0.45, 800, `--c:${p.glow}`);
-  sfx('buff');
+  sound('mystic');
   p.use(G, target);
   updateCombat();
   await checkCombatEnd();
@@ -2060,7 +2172,7 @@ function showRewards() {
           '🂠 Добавить карту в колоду'}</button>`).join('')}
         <button class="btn big" data-act="next">${rewards.every(r => r.taken) ? 'Продолжить' : 'Пропустить остальное'} ➜</button>
       </div></div>`;
-    if (intro && newTiers.length) setTimeout(() => { banner(newTiers[newTiers.length - 1].name, 'win'); sfx('aware'); }, 900);
+    if (intro && newTiers.length) setTimeout(() => { banner(newTiers[newTiers.length - 1].name, 'win'); sound('psy_long'); }, 900);
     glowShown = true;
   };
   actions = {

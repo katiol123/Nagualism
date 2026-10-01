@@ -708,3 +708,27 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 .hero-full.mystery { height: 560px; width: 300px; display: flex; align-items: center; justify-content: center; font-family: 'Cormorant SC', serif;
   font-size: 260px; font-weight: 700; color: rgba(180, 160, 210, .35); text-shadow: 0 0 40px rgba(140, 100, 220, .4); animation: hero-in .6s cubic-bezier(.2, .7, .3, 1), mystery 3s ease-in-out infinite alternate; }
 @keyframes mystery { to { color: rgba(200, 180, 230, .55); text-shadow: 0 0 60px rgba(160, 120, 240, .6); } }
+
+/* ---------- настройки ---------- */
+.settings { width: 520px; display: flex; flex-direction: column; gap: 16px; margin: 6px 0 18px; }
+.set-row { display: grid; grid-template-columns: 170px 1fr 56px; align-items: center; gap: 14px; font-size: 18px; }
+.set-row b { text-align: right; color: var(--gold-hi); }
+.set-row input[type=range] { -webkit-appearance: none; appearance: none; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--gold-lo), var(--gold)); outline: none; cursor: pointer; }
+.set-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff3b8, #f0a52a 50%, #8a4300); border: 2px solid #fff0c2; box-shadow: 0 0 10px rgba(255, 170, 60, .6); }
+.set-row input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #f0a52a; border: 2px solid #fff0c2; }
+.seg { display: flex; gap: 6px; grid-column: span 2; }
+.seg button { flex: 1; padding: 7px 0; border-radius: 6px; border: 1px solid #6b5a80; background: #231a2f; color: var(--text); font-size: 16px; font-weight: 700; cursor: pointer; }
+.seg button.on { border-color: var(--gold); background: linear-gradient(#5a4220, #2e2010); color: var(--gold-hi); }
+
+/* ---------- прогноз урона ---------- */
+.incoming { margin-top: 4px; min-height: 24px; padding: 2px 10px; border-radius: 10px; font-weight: 700; font-size: 15px; cursor: help; }
+.incoming:empty { padding: 0; }
+.incoming.safe { background: #0f2a3a; color: #9fd2ff; border: 1px solid #3b7fd0; }
+.incoming.hurts { background: #3a1014; color: #ffb0a0; border: 1px solid #a03a30; }
+.incoming.lethal { background: #5a0a10; color: #fff; border: 1px solid #ff4a4a; animation: lethal .8s ease-in-out infinite alternate; }
+.incoming span { font-weight: 400; opacity: .9; }
+@keyframes lethal { to { box-shadow: 0 0 16px #ff3030; } }
+
+/* ---------- тач-экраны ---------- */
+html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+.card.in-hand, .enemies .unit, #dragArrow { touch-action: none; }

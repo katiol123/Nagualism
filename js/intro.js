@@ -83,6 +83,10 @@ function desertHTML(cls = '') {
 //  Музыка: интро один раз, затем тема по кругу
 // ------------------------------------------------------------
 let musicMuted = localStorage.getItem('nagual_music_mute') === '1';
+// громкость из настроек (0..1)
+const volLoad = (k, d) => { const v = parseFloat(localStorage.getItem(k)); return isNaN(v) ? d : Math.max(0, Math.min(1, v)); };
+let volMusic = volLoad('nagual_vol_music', 0.8), volSfx = volLoad('nagual_vol_sfx', 0.8);
+const THEME_VOL = () => 0.55 * volMusic;
 const Music = {
   intro: null, theme: null,
   fade(a, to, ms, done) {
@@ -97,7 +101,7 @@ const Music = {
   },
   playIntro() {
     this.intro = new Audio('assets/audio/intro.mp3');
-    this.intro.volume = musicMuted ? 0 : 0.95;
+    this.intro.volume = musicMuted ? 0 : Math.min(1, 1.1 * volMusic);
     return this.intro.play();
   },
   stopIntro(ms = 500) {
@@ -115,14 +119,20 @@ const Music = {
       this.theme.addEventListener('ended', () => this.nextTrack());
     }
     if (musicMuted || !this.theme.paused) return;
-    this.theme.play().then(() => this.fade(this.theme, 0.45, 2500)).catch(() => {});
+    this.theme.play().then(() => this.fade(this.theme, THEME_VOL(), 2500)).catch(() => {});
   },
   nextTrack() {
     this.track = (this.track + 1) % this.tracks.length;
     this.theme.src = this.tracks[this.track];
     this.theme.volume = 0;
     if (musicMuted) return;
-    this.theme.play().then(() => this.fade(this.theme, 0.45, 1500)).catch(() => {});
+    this.theme.play().then(() => this.fade(this.theme, THEME_VOL(), 1500)).catch(() => {});
+  },
+  // ползунок громкости музыки: применяем сразу, без паузы
+  setVolume(v) {
+    volMusic = v; localStorage.setItem('nagual_vol_music', v);
+    if (this.theme && !this.theme.paused) { clearInterval(this.theme._fade); this.theme.volume = THEME_VOL(); }
+    if (this.intro && !this.intro.paused && !musicMuted) this.intro.volume = Math.min(1, 1.1 * v);
   },
   toggle() {
     musicMuted = !musicMuted;
@@ -131,7 +141,7 @@ const Music = {
       if (this.theme) this.fade(this.theme, 0, 400, () => this.theme.pause());
       if (this.intro) this.intro.volume = 0;
     } else {
-      if (this.intro && !this.intro.paused) this.intro.volume = 0.95;
+      if (this.intro && !this.intro.paused) this.intro.volume = Math.min(1, 1.1 * volMusic);
       else this.startTheme();
     }
   },
