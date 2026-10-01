@@ -556,7 +556,7 @@ function showTitle(fromIntro = false) {
 //  Экран: выбор героя
 // ============================================================
 function showSelect() {
-  let sel = 'castaneda';
+  let sel = 'castaneda', autoCalc = false;
   const infoHTML = h => `
         ${h.playable ? `<img class="hero-full" src="${h.body}" alt="">` : '<div class="hero-full mystery">?</div>'}
         <div class="hi-text">
@@ -566,6 +566,8 @@ function showSelect() {
             <p>Стартовая реликвия: ${relicHTML(h.relic)} <b>${RELICS[h.relic].name}</b> — ${RELICS[h.relic].desc}</p>
             <p class="muted">Стартовая колода: 4 × Удар, 4 × Оборона, Удар намерения, Полевые заметки, Вспышка осознания.</p>`
             : ''}
+          ${h.playable ? `<label class="opt-check" data-act="toggleCalc" data-tip="${esc('Под полоской здоровья героя будет видно, сколько урона придёт в ход врагов и сколько пройдёт сквозь Защиту.')}">
+            <span class="box ${autoCalc ? 'on' : ''}">${autoCalc ? '✓' : ''}</span> Включить авторасчёт получаемого урона</label>` : ''}
           <div class="row">
             <button class="btn ghost" data-act="back">Назад</button>
             <button class="btn big" data-act="start" ${h.playable ? '' : 'disabled'}>Начать путь</button>
@@ -599,7 +601,8 @@ function showSelect() {
       }, 160);
     },
     back: () => showTitle(),
-    start: () => { if (HEROES[sel].playable) newRun(sel); },
+    toggleCalc: el => { autoCalc = !autoCalc; const b = el.querySelector('.box'); b.classList.toggle('on', autoCalc); b.textContent = autoCalc ? '✓' : ''; },
+    start: () => { if (HEROES[sel].playable) { newRun(sel); run.flags.autoCalc = autoCalc; save(); } },
   };
 }
 
@@ -1812,7 +1815,7 @@ function updateCombat() {
   // сколько урона придёт в ход врагов (с учётом их Силы, Слабости и вашей Уязвимости)
   const inc = document.getElementById('incoming');
   let total = 0;
-  if (!cb.busy && !cb.over && !cb.stopWorld) for (const e of alive()) { const m = e.def.moves[e.move]; if (m && m.dmg) total += enemyDmg(e, m.dmg) * (m.times || 1); }
+  if (run.flags.autoCalc && !cb.busy && !cb.over && !cb.stopWorld) for (const e of alive()) { const m = e.def.moves[e.move]; if (m && m.dmg) total += enemyDmg(e, m.dmg) * (m.times || 1); }
   const through = Math.max(0, total - p.block);
   inc.className = 'incoming ' + (total ? (through ? (through >= run.hp ? 'lethal' : 'hurts') : 'safe') : '');
   inc.innerHTML = total ? `🗡️ ${total}${p.block ? ` <span>→ пройдёт ${through}</span>` : ''}${through >= run.hp ? ' <span>☠</span>' : ''}` : '';

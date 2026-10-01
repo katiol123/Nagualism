@@ -732,3 +732,10 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 /* ---------- тач-экраны ---------- */
 html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
 .card.in-hand, .enemies .unit, #dragArrow { touch-action: none; }
+
+/* галочка на экране выбора героя */
+.opt-check { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 16px; cursor: pointer; user-select: none; }
+.opt-check .box { width: 24px; height: 24px; border-radius: 5px; border: 2px solid var(--gold-lo); background: #120a1a; display: inline-flex; align-items: center; justify-content: center;
+  color: #1f1206; font-weight: 700; font-size: 17px; transition: background .15s, border-color .15s; }
+.opt-check .box.on { background: linear-gradient(#f2cf86, #c99545); border-color: #fff0c2; box-shadow: 0 0 10px rgba(255, 200, 100, .5); }
+.opt-check:hover .box { border-color: var(--gold); }
