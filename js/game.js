@@ -78,26 +78,52 @@ const SAMPLE_VOL = { rage: .9, braam: .85, welcome: .6, mystic: .7, laugh: .8, p
 const samples = {};
 Object.keys(SAMPLE_VOL).forEach(k => { const a = new Audio(`assets/audio/sfx/${k}.mp3`); a.preload = 'auto'; samples[k] = a; });
 const sampleLast = {};
+// Пока звучит записанный звук, старые синтезированные эффекты молчат (мс тишины для каждого)
+const SAMPLE_QUIET = { rage: 1000, braam: 1400, welcome: 900, mystic: 600, laugh: 900, psy_long: 1100, horn: 700 };
+let synthQuietUntil = 0;
+const activeSynth = [];
+let sampleBusyUntil = 0;
 function sound(name) {
   if (muted || !samples[name]) return;
   const now = performance.now();
   if (now - (sampleLast[name] || 0) < 250) return;   // не накладываем одинаковые звуки
+  // если ещё звучит другой записанный звук — ждём его окончания (но не дольше 1,5 с)
+  if (now < sampleBusyUntil) {
+    const wait = sampleBusyUntil - now;
+    sampleLast[name] = now;
+    if (wait <= 1500) setTimeout(() => { sampleLast[name] = 0; sound(name); }, wait);
+    return;
+  }
   sampleLast[name] = now;
+  sampleBusyUntil = now + SAMPLE_QUIET[name];
+  // гасим уже звучащие синтезированные эффекты и не даём новым играть поверх
+  synthQuietUntil = Math.max(synthQuietUntil, now + SAMPLE_QUIET[name]);
+  if (actx) {
+    const t = actx.currentTime;
+    activeSynth.splice(0).forEach(({ src, gain }) => {
+      try { gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(gain.gain.value, t); gain.gain.linearRampToValueAtTime(0, t + 0.04); src.stop(t + 0.05); } catch (e) { /* уже остановлен */ }
+    });
+  }
   const a = samples[name].cloneNode();
   a.volume = Math.min(1, SAMPLE_VOL[name] * volSfx);
   a.play().catch(() => {});
 }
 function sfx(kind) {
-  if (muted || volSfx <= 0) return;
+  if (muted || volSfx <= 0 || performance.now() < synthQuietUntil) return;
   try {
     actx = actx || new (window.AudioContext || window.webkitAudioContext)();
     const t = actx.currentTime;
+    const track = (src, gain) => {
+      const rec = { src, gain }; activeSynth.push(rec);
+      src.onended = () => { const i = activeSynth.indexOf(rec); if (i >= 0) activeSynth.splice(i, 1); };
+    };
     const tone = (f1, f2, dur, type = 'sine', vol = 0.15, delay = 0) => {
       const o = actx.createOscillator(), g = actx.createGain();
       o.type = type; o.frequency.setValueAtTime(f1, t + delay);
       o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + delay + dur);
       g.gain.setValueAtTime(vol * volSfx, t + delay); g.gain.exponentialRampToValueAtTime(0.001, t + delay + dur);
       o.connect(g).connect(actx.destination); o.start(t + delay); o.stop(t + delay + dur);
+      track(o, g);
     };
     const noise = (dur, vol = 0.2, freq = 1200) => {
       const b = actx.createBuffer(1, actx.sampleRate * dur, actx.sampleRate), d = b.getChannelData(0);
@@ -105,6 +131,7 @@ function sfx(kind) {
       const s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
       f.type = 'bandpass'; f.frequency.value = freq; g.gain.value = vol * volSfx;
       s.buffer = b; s.connect(f).connect(g).connect(actx.destination); s.start(t);
+      track(s, g);
     };
     switch (kind) {
       case 'card': tone(500, 800, 0.08, 'triangle', 0.08); break;
