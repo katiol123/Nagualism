@@ -351,12 +351,12 @@ const ENEMIES = {
 
   // ---------- мини-босс ----------
   cloud: {
-    name: 'Тёмное облако', hp: [112, 116], elite: true, miniboss: true,
+    name: 'Тёмное облако', hp: [122, 126], elite: true, miniboss: true,
     art: { cloud: true, w: 250 },
     moves: {
-      drizzle: { name: 'Ледяная морось', dmg: 5, times: 3 },
+      drizzle: { name: 'Ледяная морось', dmg: 6, times: 3 },
       thicken: { name: 'Сгущение', block: 12, buff: { strength: 1 } },
-      envelop: { name: 'Обволакивание', dmg: 12 },
+      envelop: { name: 'Обволакивание', dmg: 14 },
       cling: { name: 'Вцепляется!', dmg: 6, cling: true },
       sap: { name: 'Высасывание сил', dmg: 9, heal: 9, sap: 1 },
       nightmare: { name: 'Кошмарные сны', dmg: 7, addCards: { id: 'nightmare', n: 2, to: 'draw' } },
