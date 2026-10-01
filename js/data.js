@@ -14,7 +14,8 @@ const HEROES = {
     pool: ['stalk', 'notdoing', 'folly', 'gait', 'silence', 'hunt',
            'erase', 'mescalito', 'seeing', 'recap', 'ally', 'impecc',
            'shift', 'death', 'leap',
-           'twin', 'dream', 'clarity', 'fearless', 'might', 'discipline'],
+           'twin', 'dream', 'clarity', 'fearless', 'might', 'discipline',
+           'history', 'fibers', 'shiftint', 'recall', 'mimic', 'selfstalk', 'double', 'stopworld'],
   },
   donjuan: {
     id: 'donjuan', name: 'Дон Хуан Матус', title: 'Нагваль', playable: false,
@@ -54,6 +55,7 @@ const STATUS_INFO = {
   ally:       { icon: '💨', name: 'Союзник', tip: 'В конце хода наносит {n} урона случайному врагу.' },
   death:      { icon: '💀', name: 'Смерть-советчица', tip: 'В начале хода получаете {n} Личной силы.' },
   rage:       { icon: '🔥', name: 'Ярость', tip: 'Летун в ярости: каждый свой ход, помимо обычного действия, сжирает {n} Осознания. Это не делает его сильнее, но даже мастерство второго внимания не защищает.', debuff: true },
+  echo:       { icon: '👥', name: 'Двойник', tip: 'Следующая сыгранная карта (кроме сгорающих) сработает дважды.' },
   scout:      { icon: '🔷', name: 'Голубой лазутчик', tip: 'В начале хода возьмите ещё {n} карт.' },
   discipline: { icon: '🧘', name: 'Дисциплина', tip: 'В начале хода Защита не сбрасывается, а уменьшается вдвое.' },
   sapped:     { icon: '🩸', name: 'Истощение', tip: 'Облако высосало силы: в начале следующего хода −{n} энергии.', debuff: true },
@@ -155,7 +157,7 @@ const CARDS = {
     play: (g, u) => g.power('fearless', u ? 5 : 3),
   },
   erase: {
-    name: 'Стирание личной истории', type: 'skill', rarity: 'uncommon', cost: 1, art: '🧽',
+    name: 'Утрата чувства важности', type: 'skill', rarity: 'uncommon', cost: 1, art: '🧽',
     desc: (u, f) => `Получить ${f.b(u ? 15 : 11)} Защиты. Снять с себя Слабость и Уязвимость.`,
     play: (g, u) => { g.block(u ? 15 : 11); g.cleanse(); },
   },
@@ -213,6 +215,49 @@ const CARDS = {
     name: 'Дисциплина', type: 'power', rarity: 'uncommon', cost: u => u ? 1 : 2, art: '🧘',
     desc: () => 'Способность. В начале хода ваша Защита не сбрасывается, а уменьшается вдвое.',
     play: g => g.power('discipline', 1),
+  },
+
+  // ---------- карты с особыми механиками ----------
+  history: {
+    name: 'Стирание личной истории', type: 'skill', rarity: 'common', cost: 1, art: '🌫️',
+    desc: u => `Сбросьте любые карты из руки и возьмите столько же +${u ? 2 : 1}.`,
+    play: (g, u) => g.discardAndDraw(u ? 2 : 1),
+  },
+  fibers: {
+    name: 'Светящиеся волокна', type: 'skill', rarity: 'common', cost: 0, art: '✨',
+    desc: u => `Посмотрите ${u ? 4 : 3} верхние карты колоды: одну возьмите в руку, остальные можно сбросить.`,
+    play: (g, u) => g.peek(u ? 4 : 3),
+  },
+  shiftint: {
+    name: 'Сбить намерение', type: 'skill', rarity: 'uncommon', cost: u => u ? 0 : 1, target: 'enemy', art: '🎲',
+    desc: () => 'Враг меняет намерение на другое случайное (особые приёмы исключены).',
+    play: (g, u, t) => g.rerollIntent(t),
+  },
+  recall: {
+    name: 'Вспоминание', type: 'skill', rarity: 'uncommon', cost: u => u ? 0 : 1, art: '🧠',
+    desc: () => 'Верните любую карту из сброса в руку. В этом ходу она стоит 0.',
+    requires: g => g.discardCount() ? null : 'Сброс пуст',
+    play: g => g.recall(),
+  },
+  mimic: {
+    name: 'Подражание Хенаро', type: 'skill', rarity: 'uncommon', cost: 1, target: 'enemy', art: '🤹',
+    desc: u => `Повторите намерение врага против него: его атака бьёт его самого${u ? ' (+50%)' : ''}, его Защита достаётся вам, его ослабления — ему.`,
+    play: (g, u, t) => g.mimic(t, u),
+  },
+  selfstalk: {
+    name: 'Сталкинг себя', type: 'skill', rarity: 'uncommon', cost: 1, art: '🕵️',
+    desc: u => `Самые дорогие карты в руке до конца хода стоят на 1 меньше. Взять ${u ? 2 : 1} карту.`,
+    play: (g, u) => { g.discountTop(); g.draw(u ? 2 : 1); },
+  },
+  double: {
+    name: 'Двойник', type: 'skill', rarity: 'rare', cost: u => u ? 1 : 2, art: '👥', exhaust: true,
+    desc: () => 'Следующая сыгранная в этом ходу карта сработает дважды (кроме сгорающих). Сгорает.',
+    play: g => g.power('echo', 1),
+  },
+  stopworld: {
+    name: 'Неделание мира', type: 'skill', rarity: 'rare', cost: u => u ? 2 : 3, art: '⏸️', exhaust: true,
+    desc: () => 'Остановите мир: в этот ход враги не действуют. Сгорает.',
+    play: g => g.stopWorld(),
   },
 
   // ---------- уникальные: только из событий ----------

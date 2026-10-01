@@ -697,3 +697,14 @@ body.is-dragging, body.is-dragging * { cursor: grabbing !important; }
 }
 @keyframes hero-red { 0% { opacity: 0; } 12% { opacity: .62; } 100% { opacity: 0; } }
 @keyframes hero-tint { 15% { filter: drop-shadow(0 0 18px rgba(255, 40, 30, .9)) brightness(1.15); } }
+
+.card.pickable.chosen { transform: translateY(-10px); box-shadow: 0 0 0 3px #9fe2ff, 0 0 26px rgba(159, 226, 255, .7), 0 12px 24px #000; }
+.btn.ghost.on { border-color: #9fe2ff; color: #bfeaff; }
+
+/* закрытые герои на экране выбора */
+.hc-mystery { grid-row: span 2; width: 90px; height: 90px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  font-family: 'Cormorant SC', serif; font-size: 64px; font-weight: 700; color: #8a7aa0; background: radial-gradient(circle, #2a1f38, #0e0816);
+  border: 1px solid #000; box-shadow: 0 0 0 1px var(--gold-lo), inset 0 0 20px #000; }
+.hero-full.mystery { height: 560px; width: 300px; display: flex; align-items: center; justify-content: center; font-family: 'Cormorant SC', serif;
+  font-size: 260px; font-weight: 700; color: rgba(180, 160, 210, .35); text-shadow: 0 0 40px rgba(140, 100, 220, .4); animation: hero-in .6s cubic-bezier(.2, .7, .3, 1), mystery 3s ease-in-out infinite alternate; }
+@keyframes mystery { to { color: rgba(200, 180, 230, .55); text-shadow: 0 0 60px rgba(160, 120, 240, .6); } }

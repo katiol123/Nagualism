@@ -18,7 +18,10 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replac
 let uidSeq = 1;
 const mkCard = (id, up = false) => ({ uid: uidSeq++, id, up });
 const cardName = c => CARDS[c.id].name + (c.up ? '+' : '');
-const costOf = c => { const k = CARDS[c.id].cost; return typeof k === 'function' ? k(c.up) : k; };
+const costOf = c => {
+  const k = CARDS[c.id].cost, base = typeof k === 'function' ? k(c.up) : k;
+  return base === null ? null : c.tmpCost !== undefined ? Math.min(base, c.tmpCost) : base;
+};
 const canUpgrade = c => !c.up && CARDS[c.id].type !== 'status';
 
 // ============================================================
@@ -463,14 +466,14 @@ function showTitle(fromIntro = false) {
 function showSelect() {
   let sel = 'castaneda';
   const infoHTML = h => `
-        <img class="hero-full" src="${h.body}" alt="">
+        ${h.playable ? `<img class="hero-full" src="${h.body}" alt="">` : '<div class="hero-full mystery">?</div>'}
         <div class="hi-text">
-          <h3>${h.name} <small>${h.title}</small></h3>
-          <p>${h.desc}</p>
+          <h3>${h.playable ? `${h.name} <small>${h.title}</small>` : '???'}</h3>
+          <p>${h.playable ? h.desc : 'Этот путь пока скрыт. Кто ждёт на нём — узнаешь позже.'}</p>
           ${h.playable ? `<p>❤️ ${h.hp} здоровья · 💰 ${h.gold} песо</p>
             <p>Стартовая реликвия: ${relicHTML(h.relic)} <b>${RELICS[h.relic].name}</b> — ${RELICS[h.relic].desc}</p>
             <p class="muted">Стартовая колода: 4 × Удар, 4 × Оборона, Удар намерения, Полевые заметки, Вспышка осознания.</p>`
-            : '<p class="muted">Этот герой ещё проходит обучение у дона Хуана. Скоро!</p>'}
+            : ''}
           <div class="row">
             <button class="btn ghost" data-act="back">Назад</button>
             <button class="btn big" data-act="start" ${h.playable ? '' : 'disabled'}>Начать путь</button>
@@ -482,8 +485,8 @@ function showSelect() {
       <h2 class="screen-title">Выберите путь</h2>
       <div class="hero-choice">
         ${Object.values(HEROES).map(x => `<div class="hero-card ${x.id === sel ? 'sel' : ''} ${x.playable ? '' : 'locked'}" data-act="pickHero" data-id="${x.id}">
-          <img src="${x.portrait}" alt="${x.name}">
-          <div class="hc-name">${x.name}</div><div class="hc-title">${x.title}</div>
+          ${x.playable ? `<img src="${x.portrait}" alt="${x.name}">` : '<div class="hc-mystery">?</div>'}
+          <div class="hc-name">${x.playable ? x.name : '???'}</div><div class="hc-title">${x.playable ? x.title : 'путь скрыт'}</div>
           ${x.playable ? '' : '<div class="soon">скоро</div>'}
         </div>`).join('')}
       </div>
@@ -1006,7 +1009,35 @@ function whyNot(c) {
   const d = CARDS[c.id];
   if (d.unplayable) return 'Эту карту нельзя разыграть';
   if (costOf(c) > cb.p.energy) return 'Недостаточно энергии';
-  return d.requires ? d.requires(G) : null;
+  if (d.requires) return d.requires(G);
+  if (c.id === 'mimic' && !alive().some(e => { const m = e.def.moves[e.move] || {}; return m.dmg || m.block || m.debuff; })) return 'Нечего повторить';
+  return null;
+}
+
+// Выбор карт во время боя (одна или несколько). Бот выбирает автоматически.
+function modalPick({ from, multi = false, title, hint, ok = 'Готово', toggle = null }, done) {
+  if (window.BOT_AUTO) { done(multi ? [] : from.slice(0, 1), false); return; }
+  const prev = actions, chosen = new Set();
+  let flag = false;
+  cb.playing = true;
+  const render = () => {
+    openOverlay(`<h2>${title}</h2><p class="muted">${hint}</p>
+      <div class="card-grid">${from.map(c => cardHTML(c, { attrs: 'data-act="mp"', cls: 'pickable ' + (chosen.has(c.uid) ? 'chosen' : '') })).join('')}</div>
+      <div class="row">${toggle ? `<button class="btn ghost ${flag ? 'on' : ''}" data-act="mpToggle">${flag ? '☑' : '☐'} ${toggle}</button>` : ''}
+        ${multi ? `<button class="btn" data-act="mpOk">${ok}${chosen.size ? ` (${chosen.size})` : ''}</button>` : ''}</div>`, 'wide');
+  };
+  const finish = list => { closeOverlay(); actions = prev; cb.playing = false; done(list, flag); };
+  actions = {
+    ...prev,
+    mp: el => {
+      const uid = +el.dataset.uid;
+      if (multi) { chosen.has(uid) ? chosen.delete(uid) : chosen.add(uid); render(); }
+      else finish(from.filter(c => c.uid === uid));
+    },
+    mpOk: () => finish(from.filter(c => chosen.has(c.uid))),
+    mpToggle: () => { flag = !flag; render(); },
+  };
+  render();
 }
 
 function playerDmg(base, target) {
@@ -1238,6 +1269,61 @@ const G = {
     }
   },
   getBlock() { return cb.p.block; },
+  discardCount() { return cb.discard.length; },
+  stopWorld() { cb.stopWorld = true; fx('hero', '⏸️ Мир останавливается', 'buff', null, 'ring:#9fe2ff'); },
+  discountTop() {
+    const costs = cb.hand.map(costOf).filter(x => x > 0);
+    if (!costs.length) return;
+    const top = Math.max(...costs);
+    cb.hand.forEach(c => { if (costOf(c) === top) c.tmpCost = top - 1; });
+    fx('hero', `Цена ${top} → ${top - 1}`, 'buff');
+  },
+  // особые приёмы, которые нельзя ни скопировать, ни выбросить случайно
+  rerollIntent(t) {
+    if (!t || t.dead) return;
+    const SPECIAL = ['rebirth', 'cling', 'reform', 'descend', 'call', 'brood'];
+    const opts = Object.keys(t.def.moves).filter(k => k !== t.move && !SPECIAL.includes(k) && !(t.clinging && !['sap', 'nightmare'].includes(k)) && !(!t.clinging && ['sap', 'nightmare'].includes(k)) && !(t.def.boss && (t.phase2 ? !['rend', 'feast', 'gaze', 'eclipse'].includes(k) : ['rend', 'feast', 'gaze', 'eclipse'].includes(k))));
+    if (!opts.length) { fx(t.uid, 'не сбить', 'info'); return; }
+    t.move = pick(opts); t.hist[t.hist.length - 1] = t.move;
+    fx(t.uid, '🎲 ' + t.def.moves[t.move].name, 'buff', 'pulse');
+  },
+  mimic(t, up) {
+    if (!t || t.dead) return;
+    const m = t.def.moves[t.move] || {};
+    let did = false;
+    if (m.dmg) { const d = Math.floor(enemyDmg(t, m.dmg) * (up ? 1.5 : 1)); for (let i = 0; i < (m.times || 1); i++) if (!t.dead) damageEnemy(t, d); did = true; }
+    if (m.block) { G.block(m.block); did = true; }
+    if (m.debuff) { for (const [k, v] of Object.entries(m.debuff)) G.debuff(t, k, v); did = true; }
+    if (!did) fx(t.uid, 'нечего повторить', 'info');
+  },
+  discardAndDraw(extra) {
+    modalPick({ from: cb.hand, multi: true, title: 'Стирание личной истории', hint: 'Отметьте карты, от которых откажетесь', ok: 'Стереть' }, picked => {
+      cb.hand = cb.hand.filter(c => !picked.includes(c));
+      cb.discard.push(...picked);
+      drawCards(picked.length + extra);
+      updateCombat();
+    });
+  },
+  recall() {
+    modalPick({ from: cb.discard, title: 'Вспоминание', hint: 'Выберите карту из сброса' }, ([c]) => {
+      if (!c) return;
+      cb.discard = cb.discard.filter(x => x !== c);
+      c.tmpCost = 0;
+      if (cb.hand.length < 10) { cb.hand.push(c); cb.fresh.add(c.uid); } else cb.discard.push(c);
+      updateCombat();
+    });
+  },
+  peek(n) {
+    if (!cb.draw.length && cb.discard.length) { cb.draw = shuffle(cb.discard); cb.discard = []; }
+    const top = cb.draw.splice(Math.max(0, cb.draw.length - n)).reverse();
+    if (!top.length) { fx('hero', 'колода пуста', 'info'); return; }
+    modalPick({ from: top, title: 'Светящиеся волокна', hint: 'Выберите карту в руку', toggle: 'Остальные сбросить' }, ([c], dump) => {
+      const rest = top.filter(x => x !== c);
+      if (c) { if (cb.hand.length < 10) { cb.hand.push(c); cb.fresh.add(c.uid); } else cb.discard.push(c); }
+      if (dump) cb.discard.push(...rest); else cb.draw.push(...rest.reverse());
+      updateCombat();
+    });
+  },
   debuffRandom() { const t = pick(alive()); if (t) { G.debuff(t, 'weak', 2); G.debuff(t, 'vulnerable', 1); } },
   burnUnplayable() {
     const bad = cb.hand.filter(c => CARDS[c.id].unplayable);
@@ -1364,6 +1450,13 @@ async function playCard(uid, target) {
   if (!cb || cb.over) return;
   if (d.type === 'attack') fx('hero', '', '', 'lunge');
   d.play(G, c.up, target);
+  delete c.tmpCost;
+  if (cb.p.st.echo && c.id !== 'double' && !d.exhaust && !cb.over) {
+    delete cb.p.st.echo;
+    fx('hero', '👥 Двойник повторяет', 'buff', null, 'ring:#c9b0ff');
+    await sleep(260);
+    if (cb && !cb.over) d.play(G, c.up, target && !target.dead ? target : null);
+  }
   if (d.type === 'power') { /* способности исчезают */ }
   else if (d.exhaust) { cb.exhaust.push(c); }
   else cb.discard.push(c);
@@ -1395,7 +1488,9 @@ async function endTurn() {
     const c = cb.hand.find(x => x.uid === +el.dataset.uid);
     flyCard(el, pile, c && CARDS[c.id].ethereal ? 'burn' : 'discard', k * 55);
   });
+  delete p.st.echo;
   for (const c of cb.hand) {
+    delete c.tmpCost;
     if (CARDS[c.id].endTurnHp) G.loseHp(CARDS[c.id].endTurnHp);
     if (CARDS[c.id].ethereal) { cb.exhaust.push(c); fx('hero', `${CARDS[c.id].name} сгорает`, 'info'); }
     else cb.discard.push(c);
@@ -1408,10 +1503,12 @@ async function endTurn() {
   await sleep(700);
 
   // ход врагов
-  for (const e of alive()) e.block = 0;
+  const frozen = cb.stopWorld; cb.stopWorld = false;
+  if (frozen) { banner('Мир остановлен', 'win'); await sleep(900); }
+  else for (const e of alive()) e.block = 0;
   updateCombat();
   for (const e of [...cb.enemies]) {
-    if (e.dead || cb.over) continue;
+    if (e.dead || cb.over || frozen) continue;
     await doEnemyMove(e);
     if (await checkCombatEnd()) return;
     await sleep(380);
@@ -1420,7 +1517,7 @@ async function endTurn() {
   for (const e of cb.enemies) for (const k of ['weak', 'vulnerable']) if (e.st[k]) addSt(e.st, k, -1);
   for (const k of ['weak', 'vulnerable']) if (p.st[k] && !cb.justApplied.has(k)) addSt(p.st, k, -1);
   cb.justApplied.clear();
-  cb.enemies.forEach(chooseIntent);
+  if (!frozen) cb.enemies.forEach(chooseIntent);
   updateCombat();
   await sleep(200);
   startTurn();
