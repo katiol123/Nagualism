@@ -190,7 +190,7 @@ function playIntro() {
         `<i style="--x:${x}px;--y:${y}px"></i>`).join('')}</div>
       <div class="i-dust">${dust}</div>
       <div class="i-hero">
-        <div class="i-walker"><img src="assets/heroes/castaneda_walk.png" alt=""></div>
+        <div class="i-walker"><img src="${HEROES.castaneda.side}" alt=""></div>
         <div class="i-aura"></div>
         <img class="i-stand" src="${HEROES.castaneda.body}" alt="">
       </div>

@@ -1456,7 +1456,7 @@ function renderCombatShell() {
     ${motes(14, 'embers')}<div class="fog"></div>
     <div class="field">
       <div class="unit hero" data-unit="hero">
-        <div class="sprite"><img src="${h.body}" alt=""></div>
+        <div class="sprite"><img src="${h.side || h.body}" alt=""></div>
         <div class="u-bar"></div><div class="statuses"></div>
       </div>
       <div class="enemies" id="enemies"></div>

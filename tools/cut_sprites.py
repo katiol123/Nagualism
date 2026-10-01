@@ -16,11 +16,12 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 OUT = os.path.join(ROOT, 'assets', 'heroes')
 
 # имя: (лист, кроп фигуры в полный рост, кроп портрета)
+# Кастанеда больше не вырезается из листа: его спрайты (вид спереди и сбоку) сделаны из
+# фото в высоком качестве — assets/heroes/source/carlos_front.png и carlos_side.png.
+# Портрет castaneda_portrait.jpg остаётся из листа (там крупный план лица).
 JOBS = {
-    'castaneda': ('young_carlos_castaneda_model_sheet.jpg', (760, 665, 1160, 1225), (80, 110, 610, 608)),
     'donjuan': ('don_juan_model_sheet_1-edited.jpg', (800, 640, 1120, 1225), (30, 20, 630, 580)),
     'genaro': ('don_genaro_model_sheet.jpg', (820, 655, 1100, 1215), (80, 85, 650, 598)),
-    'castaneda_walk': ('young_carlos_castaneda_model_sheet.jpg', (1420, 665, 1740, 1228), None),  # для заставки
 }
 
 _net = None
@@ -137,4 +138,4 @@ def main(only=None):
 
 if __name__ == '__main__':
     import sys
-    main(sys.argv[1:] or None)   # можно указать имена: python3 tools/cut_sprites.py castaneda_walk
+    main(sys.argv[1:] or None)   # можно указать имена: python3 tools/cut_sprites.py genaro

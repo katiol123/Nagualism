@@ -7,6 +7,7 @@ const HEROES = {
     id: 'castaneda', name: 'Карлос Кастанеда', title: 'Ученик', playable: true,
     hp: 72, gold: 99,
     body: 'assets/heroes/castaneda_body.png', portrait: 'assets/heroes/castaneda_portrait.jpg',
+    side: 'assets/heroes/castaneda_side.png',   // вид сбоку: в бою герой смотрит на летунов
     desc: 'Антрополог, ставший учеником дона Хуана. Копит Осознание, а затем одним рывком сдвигает точку сборки. Летуны охотятся за его осознанием — не давайте им насытиться.',
     deck: ['strike', 'strike', 'strike', 'strike', 'intent', 'defend', 'defend', 'defend', 'defend', 'notes', 'flash'],
     relic: 'notebook',
