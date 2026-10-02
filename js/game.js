@@ -1955,7 +1955,10 @@ function ensureEnemyEl(e, summoned = false) {
   // наведение на врага: урон на картах пересчитывается с учётом его статусов
   div.addEventListener('pointerenter', () => { if (cb && !e.dead) { cb.hoverTarget = e; renderHand(); } });
   div.addEventListener('pointerleave', () => { if (cb && cb.hoverTarget === e && !drag) { cb.hoverTarget = null; renderHand(); } });
-  document.getElementById('enemies').appendChild(div);
+  // призванный встаёт на место погибшего — иначе невидимые трупы раздвигают ряд и летуны уползают влево
+  const box = document.getElementById('enemies');
+  const slot = summoned && box.querySelector('.unit.dead');
+  if (slot) slot.replaceWith(div); else box.appendChild(div);
 }
 
 function clingCloud(e) {
